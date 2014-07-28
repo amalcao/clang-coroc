@@ -166,6 +166,18 @@ ASTConsumer *RewriteObjCAction::CreateASTConsumer(CompilerInstance &CI,
 
 #endif
 
+
+//===----------------------------------------------------------------------===//
+// Rewrite-CoroC Actions
+//===----------------------------------------------------------------------===//
+ASTConsumer *RewriteCoroCAction::CreateASTConsumer(CompilerInstance &CI,
+												   StringRef InFile) {
+  if (raw_ostream *OS = CI.createDefaultOutputFile(false, InFile, "cc"))
+    return CreateCoroCRewriter(InFile, OS,
+							   CI.getDiagnostics(), CI.getLangOpts());
+  return nullptr;
+}
+
 //===----------------------------------------------------------------------===//
 // Preprocessor Actions
 //===----------------------------------------------------------------------===//
