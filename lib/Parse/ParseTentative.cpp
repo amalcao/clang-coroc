@@ -988,6 +988,9 @@ Parser::isExpressionOrTypeSpecifierSimple(tok::TokenKind Kind) {
   case tok::kw___vector:
   case tok::kw___pixel:
   case tok::kw__Atomic:
+  case tok::kw___task_t:
+  case tok::kw___chan_t:
+  case tok::kw___refcnt_t:
   case tok::kw___unknown_anytype:
     return TPResult::False;
 

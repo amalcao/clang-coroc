@@ -571,6 +571,19 @@ ALIAS("__char32_t"   , char32_t   , KEYCXX)
 TESTING_KEYWORD(__unknown_anytype , KEYALL)
 
 
+// Coro-C keywords
+KEYWORD(__CoroC_Spawn, KEYCOROC)
+KEYWORD(__CoroC_Yield, KEYCOROC)
+KEYWORD(__CoroC_Quit,  KEYCOROC)
+KEYWORD(__CoroC_Chan,  KEYCOROC)
+KEYWORD(__CoroC_Select, KEYCOROC)
+
+// Coro-C builtin types
+KEYWORD(__task_t, KEYCOROC)
+KEYWORD(__chan_t, KEYCOROC)
+KEYWORD(__refcnt_t, KEYCOROC)
+
+
 //===----------------------------------------------------------------------===//
 // Objective-C @-preceded keywords.
 //===----------------------------------------------------------------------===//

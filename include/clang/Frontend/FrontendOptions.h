@@ -51,6 +51,7 @@ namespace frontend {
     PrintPreprocessedInput, ///< -E mode.
     RewriteMacros,          ///< Expand macros but not \#includes.
     RewriteObjC,            ///< ObjC->C Rewriter.
+    RewriteCoroC,           ///< CoroC->C Rewriter.
     RewriteTest,            ///< Rewriter playground
     RunAnalysis,            ///< Run one or more source code analyses.
     MigrateSource,          ///< Run migrator.
@@ -72,7 +73,8 @@ enum InputKind {
   IK_OpenCL,
   IK_CUDA,
   IK_AST,
-  IK_LLVM_IR
+  IK_LLVM_IR,
+  IK_CoroC,
 };
 
   

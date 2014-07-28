@@ -38,6 +38,12 @@ ASTConsumer *CreateModernObjCRewriter(const std::string &InFile,
                                 bool SilenceRewriteMacroWarning,
                                 bool LineInfo);
 
+// CoroC rewriter: translate the CoroC source to pure C code.
+ASTConsumer *CreateCoroCRewriter(const std::string &InFile,
+                                 raw_ostream *OS,
+                                 DiagnosticsEngine &Diags,
+                                 const LangOptions &LOpts);
+
 /// CreateHTMLPrinter - Create an AST consumer which rewrites source code to
 /// HTML with syntax highlighting suitable for viewing in a web-browser.
 ASTConsumer *CreateHTMLPrinter(raw_ostream *OS, Preprocessor &PP,

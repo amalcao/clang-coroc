@@ -354,6 +354,12 @@ namespace  {
     void VisitObjCIvarRefExpr(const ObjCIvarRefExpr *Node);
     void VisitObjCBoolLiteralExpr(const ObjCBoolLiteralExpr *Node);
 
+    // CoroC
+    void VisitCoroCSpawnCallExpr(const CoroCSpawnCallExpr *Node);
+    void VisitCoroCMakeChanExpr(const CoroCMakeChanExpr *Node);
+    void VisitCoroCYieldStmt(const CoroCYieldStmt *Node);
+    void VisitCoroCQuitStmt(const CoroCQuitStmt *Node);
+
     // Comments.
     const char *getCommandName(unsigned CommandID);
     void dumpComment(const Comment *C);
@@ -1033,6 +1039,15 @@ void ASTDumper::VisitVarDecl(const VarDecl *D) {
     dumpStmt(D->getInit());
   }
 }
+
+#if 0
+void ASTDumper::VisitChanVarDecl(const ChanVarDecl *D) {
+  VisitVarDecl(D);
+  OS << " <<";
+  dumpType(D->getElemType());
+  OS << ">>";
+}
+#endif
 
 void ASTDumper::VisitFileScopeAsmDecl(const FileScopeAsmDecl *D) {
   lastChild();
@@ -2000,6 +2015,37 @@ void ASTDumper::VisitObjCBoolLiteralExpr(const ObjCBoolLiteralExpr *Node) {
   VisitExpr(Node);
   OS << " " << (Node->getValue() ? "__objc_yes" : "__objc_no");
 }
+
+
+//===----------------------------------------------------------------------===//
+// CoroC 
+//===----------------------------------------------------------------------===//
+void ASTDumper::VisitCoroCSpawnCallExpr(const CoroCSpawnCallExpr *Node) {
+  VisitExpr(Node);
+  dumpStmt(Node->getCallExpr()); // FIXME
+}
+
+void ASTDumper::VisitCoroCMakeChanExpr(const CoroCMakeChanExpr *Node) {
+  VisitExpr(Node);
+  OS << " type of elements is";
+  dumpType(Node->getElemType());
+  if (Node->getCapExpr() != nullptr) {
+    dumpStmt(Node->getCapExpr());
+  } else {
+    OS << " (no buffer)";
+  }
+}
+
+void ASTDumper::VisitCoroCYieldStmt(const CoroCYieldStmt *Node) {
+  VisitStmt(Node); // TODO
+}
+
+void ASTDumper::VisitCoroCQuitStmt(const CoroCQuitStmt *Node) {
+  VisitStmt(Node); // TODO
+  if (Node->getReturnExpr() != nullptr)
+    dumpStmt(Node->getReturnExpr());
+}
+
 
 //===----------------------------------------------------------------------===//
 // Comments

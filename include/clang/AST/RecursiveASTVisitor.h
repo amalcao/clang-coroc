@@ -1853,6 +1853,8 @@ DEF_TRAVERSE_DECL(ParmVarDecl, {
     TRY_TO(TraverseStmt(D->getDefaultArg()));
 })
 
+DEF_TRAVERSE_DECL(ChanVarDecl, { TRY_TO(TraverseVarHelper(D)); })
+
 #undef DEF_TRAVERSE_DECL
 
 // ----------------- Stmt traversal -----------------
@@ -2353,6 +2355,21 @@ DEF_TRAVERSE_STMT(OMPOrderedDirective,
 
 DEF_TRAVERSE_STMT(OMPAtomicDirective,
                   { TRY_TO(TraverseOMPExecutableDirective(S)); })
+
+// CoroC statements ..
+DEF_TRAVERSE_STMT(CoroCYieldStmt, {})
+DEF_TRAVERSE_STMT(CoroCQuitStmt, {
+    TRY_TO(TraverseStmt(S->getReturnExpr()));
+    return true; })
+
+DEF_TRAVERSE_STMT(CoroCSpawnCallExpr, {
+    TRY_TO(TraverseStmt(S->getCallExpr()));
+    return true; })
+
+DEF_TRAVERSE_STMT(CoroCMakeChanExpr, {
+    TRY_TO(TraverseType(S->getElemType()));
+    TRY_TO(TraverseStmt(S->getCapExpr()));
+    return true; })
 
 // OpenMP clauses.
 template <typename Derived>

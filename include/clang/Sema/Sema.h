@@ -3096,6 +3096,24 @@ public:
   RecordDecl *CreateCapturedStmtRecordDecl(CapturedDecl *&CD,
                                            SourceLocation Loc,
                                            unsigned NumParams);
+
+  // for CoroC ..
+  StmtResult ActOnCoroCYieldStmt(SourceLocation YieldLoc);
+  StmtResult ActOnCoroCQuitStmt(SourceLocation QuitLoc, Expr *E);
+
+  ExprResult ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E);
+  ExprResult BuildCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E);
+
+  ExprResult ActOnCoroCMakeChanExpr(SourceLocation ChanLoc, 
+                                    SourceLocation GTLoc,
+                                    SourceRange TyRange,
+                                    ParsedType T, Expr *E);
+  ExprResult BuildCoroCMakeChanExpr(SourceLocation ChanLoc, 
+                                    SourceLocation GTLoc,
+                                    SourceRange TyRange,
+                                    QualType T, Expr *E);
+  // --
+
   VarDecl *getCopyElisionCandidate(QualType ReturnType, Expr *E,
                                    bool AllowFunctionParameters);
   bool isCopyElisionCandidate(QualType ReturnType, const VarDecl *VD,
@@ -7829,6 +7847,8 @@ public:
   QualType CheckSubtractionOperands( // C99 6.5.6
     ExprResult &LHS, ExprResult &RHS, SourceLocation Loc,
     QualType* CompLHSTy = nullptr);
+  QualType CheckChanOperands( // CoroC
+    ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, unsigned Opc);
   QualType CheckShiftOperands( // C99 6.5.7
     ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, unsigned Opc,
     bool IsCompAssign = false);

@@ -10442,6 +10442,44 @@ TreeTransform<Derived>::TransformCapturedStmt(CapturedStmt *S) {
   return getSema().ActOnCapturedRegionEnd(Body.get());
 }
 
+
+/// for CoroC 
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformCoroCYieldStmt(CoroCYieldStmt *S) {
+    return S;
+}
+
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformCoroCQuitStmt(CoroCQuitStmt *S) {
+    return S;
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
+#if 0
+    Expr *EE = E->getCallExpr();
+    
+    ExprResult NewExpr = getDerived().TransformExpr(EE)
+    if (NewExpr.isInvalid())
+        return ExprError();
+    
+    return getSema().BuildCoroCSpawnCallExpr(E->getLocation(), NewExpr.get());
+#else
+    llvm_unreachable("Cannot transform CoroCSpawnCallExpr now");
+#endif
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
+    llvm_unreachable("Cannot transform CoroCMakeChanExpr now");
+}
+
+
+
 } // end namespace clang
 
 #endif // LLVM_CLANG_SEMA_TREETRANSFORM_H

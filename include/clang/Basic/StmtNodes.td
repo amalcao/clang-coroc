@@ -48,6 +48,11 @@ def CXXCatchStmt : Stmt;
 def CXXTryStmt : Stmt;
 def CXXForRangeStmt : Stmt;
 
+// CoroC statments
+def CoroCYieldStmt : Stmt;
+def CoroCQuitStmt : Stmt;
+
+
 // Expressions
 def Expr : Stmt<1>;
 def PredefinedExpr : DStmt<Expr>;
@@ -175,6 +180,10 @@ def MSDependentExistsStmt : Stmt;
 
 // OpenCL Extensions.
 def AsTypeExpr : DStmt<Expr>;
+
+// CoroC Expressions.
+def CoroCSpawnCallExpr : DStmt<Expr>;
+def CoroCMakeChanExpr : DStmt<Expr>;
 
 // OpenMP Directives.
 def OMPExecutableDirective : Stmt<1>;

@@ -2168,6 +2168,67 @@ public:
   friend class ASTStmtReader;
 };
 
+/// CoroCYieldStmt - This represents a __CoroC_Yield
+class CoroCYieldStmt : public Stmt {
+    SourceLocation YieldLoc;
+    
+    friend class ASTStmtReader;
+
+public:
+    explicit CoroCYieldStmt(SourceLocation SL)
+        : Stmt(CoroCYieldStmtClass), YieldLoc(SL) {}
+    explicit CoroCYieldStmt(EmptyShell E) : Stmt(CoroCYieldStmtClass, E) {}
+
+    SourceLocation getYieldLoc() const { return YieldLoc; }
+
+    SourceLocation getLocStart() const LLVM_READONLY { return YieldLoc; }
+    SourceLocation getLocEnd() const LLVM_READONLY { return YieldLoc; }
+
+    SourceRange getSourceRange() const LLVM_READONLY {
+        return SourceRange(YieldLoc);
+    }
+
+    static bool classof(const Stmt *T) {
+        return T->getStmtClass() == CoroCYieldStmtClass;
+    }
+    static bool classof(CoroCYieldStmt *) { return true; }
+
+    child_range children() { return child_range(); }
+};
+
+/// CoroCQuitStmt - This represents a __CoroC_Quit
+class CoroCQuitStmt : public Stmt {
+    SourceLocation QuitLoc;
+    Expr *TheExpr;
+    
+    friend class ASTStmtReader;
+
+public:
+    explicit CoroCQuitStmt(SourceLocation SL, Expr *E)
+        : Stmt(CoroCQuitStmtClass), QuitLoc(SL), TheExpr(E) {}
+    explicit CoroCQuitStmt(EmptyShell E) : Stmt(CoroCQuitStmtClass, E) {}
+
+    const Expr* getReturnExpr() const { return TheExpr; }
+    Expr* getReturnExpr() { return TheExpr; }
+    void setReturnExpr(Expr* E) { TheExpr = E; }
+
+    SourceLocation getQuitLoc() const { return QuitLoc; }
+
+    SourceLocation getLocStart() const LLVM_READONLY { return QuitLoc; }
+    SourceLocation getLocEnd() const LLVM_READONLY { return QuitLoc; }
+
+    SourceRange getSourceRange() const LLVM_READONLY {
+        return SourceRange(QuitLoc);
+    }
+
+    static bool classof(const Stmt *T) {
+        return T->getStmtClass() == CoroCQuitStmtClass;
+    }
+    static bool classof(CoroCQuitStmt *) { return true; }
+
+    child_range children() { return child_range(); }
+};
+
 }  // end namespace clang
 
 #endif

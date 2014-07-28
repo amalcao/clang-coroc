@@ -1601,7 +1601,9 @@ public:
     STK_Integral,
     STK_Floating,
     STK_IntegralComplex,
-    STK_FloatingComplex
+    STK_FloatingComplex,
+    STK_ChanRef,
+    STK_TaskRef
   };
   /// getScalarTypeKind - Given that this is a scalar type, classify it.
   ScalarTypeKind getScalarTypeKind() const;

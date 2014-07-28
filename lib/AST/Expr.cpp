@@ -1950,7 +1950,6 @@ Stmt *BlockExpr::getBody() {
   return TheBlock->getBody();
 }
 
-
 //===----------------------------------------------------------------------===//
 // Generic Expression Routines
 //===----------------------------------------------------------------------===//
@@ -2035,6 +2034,13 @@ bool Expr::isUnusedResultAWarning(const Expr *&WarnE, SourceLocation &Loc,
       case BO_LOr:
         if (!BO->getLHS()->isUnusedResultAWarning(WarnE, Loc, R1, R2, Ctx) ||
             !BO->getRHS()->isUnusedResultAWarning(WarnE, Loc, R1, R2, Ctx))
+          return false;
+        break;
+     
+     // Check if the CoroC channel send / recv operation
+     case BO_Shl:
+     case BO_Shr:
+        if (BO->getType() == Ctx.VoidTy)
           return false;
         break;
     }

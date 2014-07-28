@@ -168,6 +168,7 @@ const {
              (PhaseArg = DAL.getLastArg(options::OPT_verify_pch)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_objc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_legacy_objc)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT_rewrite_coro_c)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__migrate)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__analyze,
                                         options::OPT__analyze_auto)) ||
@@ -1306,6 +1307,8 @@ Action *Driver::ConstructPhaseAction(const ArgList &Args, phases::ID Phase,
       return new CompileJobAction(Input, types::TY_RewrittenObjC);
     } else if (Args.hasArg(options::OPT_rewrite_legacy_objc)) {
       return new CompileJobAction(Input, types::TY_RewrittenLegacyObjC);
+    } else if (Args.hasArg(options::OPT_rewrite_coro_c)) {
+      return new CompileJobAction(Input, types::TY_RewriteCoroC);
     } else if (Args.hasArg(options::OPT__analyze, options::OPT__analyze_auto)) {
       return new AnalyzeJobAction(Input, types::TY_Plist);
     } else if (Args.hasArg(options::OPT__migrate)) {
@@ -1485,6 +1488,7 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
       !C.getArgs().hasArg(options::OPT_traditional_cpp) &&
       !C.getArgs().hasArg(options::OPT_save_temps) &&
       !C.getArgs().hasArg(options::OPT_rewrite_objc) &&
+      !C.getArgs().hasArg(options::OPT_rewrite_coro_c) &&
       ToolForJob->hasIntegratedCPP())
     Inputs = &(*Inputs)[0]->getInputs();
 

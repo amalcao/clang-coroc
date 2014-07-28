@@ -211,6 +211,15 @@ void Sema::Initialize() {
     addImplicitTypedef("event_t", Context.OCLEventTy);
   }
 
+#if 0
+  // Initilization predefined CoroC types
+  if (PP.getLangOpts().CoroC) {
+    addImplicitTypedef("__chan_t", Context.ChanRefTy);
+    addImplicitTypedef("__task_t", Context.TaskRefTy);
+    addImplicitTypedef("__refcnt_t", Context.GeneralRefTy);
+  }
+#endif
+
   DeclarationName BuiltinVaList = &Context.Idents.get("__builtin_va_list");
   if (IdResolver.begin(BuiltinVaList) == IdResolver.end())
     PushOnScopeChains(Context.getBuiltinVaListDecl(), TUScope);

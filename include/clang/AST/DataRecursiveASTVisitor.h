@@ -1778,6 +1778,8 @@ bool RecursiveASTVisitor<Derived>::TraverseVarHelper(VarDecl *D) {
 
 DEF_TRAVERSE_DECL(VarDecl, { TRY_TO(TraverseVarHelper(D)); })
 
+DEF_TRAVERSE_DECL(ChanVarDecl, { TRY_TO(TraverseVarHelper(D)); })
+
 DEF_TRAVERSE_DECL(VarTemplateSpecializationDecl, {
   // For implicit instantiations, we don't want to
   // recurse at all, since the instatiated class isn't written in
@@ -2268,6 +2270,15 @@ DEF_TRAVERSE_STMT(ObjCDictionaryLiteral, {})
 
 // Traverse OpenCL: AsType, Convert.
 DEF_TRAVERSE_STMT(AsTypeExpr, {})
+
+// CoroC statements and expressions
+DEF_TRAVERSE_STMT(CoroCSpawnCallExpr, { 
+    TRY_TO(TraverseStmt(S->getCallExpr())); })
+DEF_TRAVERSE_STMT(CoroCMakeChanExpr, { 
+    TRY_TO(TraverseType(S->getElemType()));
+    if (S->getCapExpr() != nullptr) { TRY_TO(TraverseStmt(S->getCapExpr())); } })
+DEF_TRAVERSE_STMT(CoroCYieldStmt, {})
+DEF_TRAVERSE_STMT(CoroCQuitStmt, {})
 
 // OpenMP directives.
 template <typename Derived>

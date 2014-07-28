@@ -84,6 +84,7 @@ bool types::isAcceptedByClang(ID Id) {
 
   case TY_Asm:
   case TY_C: case TY_PP_C:
+  case TY_CoroC:
   case TY_CL:
   case TY_CUDA:
   case TY_ObjC: case TY_PP_ObjC: case TY_PP_ObjC_Alias:
@@ -176,6 +177,7 @@ types::ID types::lookupTypeForExtension(const char *Ext) {
            .Case("pcm", TY_ModuleFile)
            .Case("pch", TY_PCH)
            .Case("gch", TY_PCH)
+           .Case("co", TY_CoroC)
            .Default(TY_INVALID);
 }
 

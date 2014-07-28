@@ -1607,6 +1607,37 @@ void ASTStmtWriter::VisitAsTypeExpr(AsTypeExpr *E) {
 }
 
 //===----------------------------------------------------------------------===//
+// CoroC Expressions and Statements.
+//===----------------------------------------------------------------------===//
+void ASTStmtWriter::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
+    VisitExpr(E);
+    Writer.AddStmt(E->getCallExpr());
+    Writer.AddSourceLocation(E->getLocStart(), Record);
+    Code = serialization::EXPR_COROC_SPAWN;
+}
+
+void ASTStmtWriter::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
+    VisitExpr(E);
+    if (E->getCapExpr())
+        Writer.AddStmt(E->getCapExpr());
+    Writer.AddSourceLocation(E->getLocStart(), Record);
+    Code = serialization::EXPR_COROC_CHAN;
+}
+
+void ASTStmtWriter::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
+    VisitStmt(S);
+    Writer.AddSourceLocation(S->getYieldLoc(), Record);
+    Code = serialization::STMT_COROC_YIELD;
+}
+
+void ASTStmtWriter::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
+    VisitStmt(S);
+    Writer.AddSourceLocation(S->getQuitLoc(), Record);
+    Code = serialization::STMT_COROC_QUIT;
+}
+
+
+//===----------------------------------------------------------------------===//
 // Microsoft Expressions and Statements.
 //===----------------------------------------------------------------------===//
 void ASTStmtWriter::VisitMSPropertyRefExpr(MSPropertyRefExpr *E) {

@@ -123,6 +123,10 @@ static bool DiagnoseUnusedComparison(Sema &S, const Expr *E) {
   SourceLocation Loc;
   bool IsNotEqual, CanAssign, IsRelational;
 
+  /* we can ignore the result of __CoroC_Spawn sometimes */
+  if (dyn_cast<CoroCSpawnCallExpr>(E)) 
+    return true;
+
   if (const BinaryOperator *Op = dyn_cast<BinaryOperator>(E)) {
     if (!Op->isComparisonOp())
       return false;
@@ -2424,6 +2428,16 @@ Sema::ActOnBreakStmt(SourceLocation BreakLoc, Scope *CurScope) {
                      << "break");
 
   return new (Context) BreakStmt(BreakLoc);
+}
+
+StmtResult
+Sema::ActOnCoroCYieldStmt(SourceLocation YieldLoc) {
+    return new (Context) CoroCYieldStmt(YieldLoc);
+}
+
+StmtResult
+Sema::ActOnCoroCQuitStmt(SourceLocation QuitLoc, Expr *E) {
+    return new (Context) CoroCQuitStmt(QuitLoc, E);
 }
 
 /// \brief Determine whether the given expression is a candidate for

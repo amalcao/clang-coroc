@@ -428,6 +428,11 @@ Decl *TemplateDeclInstantiator::VisitVarDecl(VarDecl *D,
   return Var;
 }
 
+// FIXME
+Decl *TemplateDeclInstantiator::VisitChanVarDecl(ChanVarDecl *D) {
+  return VisitVarDecl(D);
+}
+
 Decl *TemplateDeclInstantiator::VisitAccessSpecDecl(AccessSpecDecl *D) {
   AccessSpecDecl* AD
     = AccessSpecDecl::Create(SemaRef.Context, D->getAccess(), Owner,

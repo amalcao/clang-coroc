@@ -2252,6 +2252,26 @@ unsigned ParmVarDecl::getParameterIndexLarge() const {
   return getASTContext().getParameterIndex(this);
 }
 
+
+//===----------------------------------------------------------------------===//
+// ChanVarDecl Implementation
+//===----------------------------------------------------------------------===//
+ChanVarDecl *ChanVarDecl::Create(ASTContext &C, DeclContext *DC,
+                         SourceLocation StartLoc, SourceLocation IdL,
+                         IdentifierInfo *Id, QualType T, TypeSourceInfo *TInfo,
+                         StorageClass S) {
+  ChanVarDecl *D = new (C, DC) ChanVarDecl(ChanVar, C, DC, StartLoc, IdL, Id, T, TInfo, S);
+  if (D != nullptr)
+    D->setElemType(C.VoidTy);
+  return D;
+}
+
+ChanVarDecl *ChanVarDecl::CreateDeserialized(ASTContext &C, unsigned ID) {
+  return new (C, ID)
+         ChanVarDecl(ChanVar, C, nullptr, SourceLocation(), SourceLocation(), nullptr,
+              QualType(), nullptr, SC_None);
+}
+
 //===----------------------------------------------------------------------===//
 // FunctionDecl Implementation
 //===----------------------------------------------------------------------===//

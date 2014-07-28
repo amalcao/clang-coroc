@@ -1035,6 +1035,13 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target) {
     InitBuiltinType(OCLSamplerTy, BuiltinType::OCLSampler);
     InitBuiltinType(OCLEventTy, BuiltinType::OCLEvent);
   }
+
+  // CoroC builtin types.
+  if (LangOpts.CoroC) {
+    InitBuiltinType(GeneralRefTy, BuiltinType::GeneralRef);
+    InitBuiltinType(TaskRefTy, BuiltinType::TaskRef);
+    InitBuiltinType(ChanRefTy, BuiltinType::ChanRef);
+  }
   
   // Builtin type for __objc_yes and __objc_no
   ObjCBuiltinBoolTy = (Target.useSignedCharForObjCBool() ?

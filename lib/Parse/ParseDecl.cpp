@@ -2414,6 +2414,31 @@ Parser::DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
   ParseDeclarationSpecifiers(DS, NotATemplate, AS, DSContext, LateAttrs);
   return false;
 }
+ 
+/// ParseCoroCChanDeclaration
+///     __chan_t chan or __chan_t<typename> chan
+void Parser::ParseCoroCChanDeclaration(DeclSpec &DS) {
+  // Match '<' or return 
+  Token Next = NextToken();
+  if (Next.getKind() != tok::less) 
+    return;
+
+  // eat the '__chan_t'
+  ConsumeToken(); 
+  // eat '<' and parse the typename
+  ConsumeToken();
+  TypeResult Ty = ParseTypeName();
+
+  // match '>'
+  if (Tok.getKind() != tok::greater) {
+    ExpectAndConsume(tok::greater);
+    SkipUntil(tok::semi, StopAtSemi);
+    return ;
+  }
+  
+  // record the element type 
+  DS.SetChanElemType(Ty.get());
+}
 
 /// ParseDeclarationSpecifiers
 ///       declaration-specifiers: [C99 6.7]
@@ -3086,6 +3111,22 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     case tok::kw___pixel:
       isInvalid = DS.SetTypeAltiVecPixel(true, Loc, PrevSpec, DiagID, Policy);
       break;
+
+    // CoroC types
+    case tok::kw___task_t:
+      isInvalid = DS.SetTypeSpecType(DeclSpec::TST_task_t, Loc, PrevSpec,
+                                     DiagID, Policy);
+      break;
+    case tok::kw___chan_t:
+      isInvalid = DS.SetTypeSpecType(DeclSpec::TST_chan_t, Loc, PrevSpec,
+                                     DiagID, Policy);
+      ParseCoroCChanDeclaration(DS);
+      break;
+    case tok::kw___refcnt_t:
+      isInvalid = DS.SetTypeSpecType(DeclSpec::TST_refcnt_t, Loc, PrevSpec,
+                                     DiagID, Policy);
+      break;
+
     case tok::kw___unknown_anytype:
       isInvalid = DS.SetTypeSpecType(TST_unknown_anytype, Loc,
                                      PrevSpec, DiagID, Policy);
@@ -3961,6 +4002,10 @@ bool Parser::isKnownToBeTypeSpecifier(const Token &Tok) const {
   case tok::kw__Decimal64:
   case tok::kw__Decimal128:
   case tok::kw___vector:
+   // CoroC builtin types
+  case tok::kw___task_t:
+  case tok::kw___chan_t:
+  case tok::kw___refcnt_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
   case tok::kw_class:
@@ -4033,6 +4078,11 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw__Decimal64:
   case tok::kw__Decimal128:
   case tok::kw___vector:
+
+    // CoroC builtin types
+  case tok::kw___chan_t:
+  case tok::kw___task_t:
+  case tok::kw___refcnt_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
   case tok::kw_class:
@@ -4173,6 +4223,11 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw__Decimal64:
   case tok::kw__Decimal128:
   case tok::kw___vector:
+
+    // CoroC builtin types
+  case tok::kw___task_t:
+  case tok::kw___chan_t:
+  case tok::kw___refcnt_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
   case tok::kw_class:

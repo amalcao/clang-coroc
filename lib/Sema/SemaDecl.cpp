@@ -5279,6 +5279,17 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
+  if (getLangOpts().CoroC) {
+    if (R == Context.TaskRefTy || R == Context.ChanRefTy) {
+      // The `__task_t' and `__chan_t' cannot have any specifiers!!
+      if (SC != SC_None) {
+        Diag(D.getDeclSpec().getStorageClassSpecLoc(), 
+           diag::err_typecheck_coro_sclass);
+        D.setInvalidType();
+      }
+    }
+  }
+
   if (getLangOpts().OpenCL) {
     // Set up the special work-group-local storage class for variables in the
     // OpenCL __local address space.
@@ -5318,7 +5329,28 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   VarDecl *NewVD = nullptr;
   VarTemplateDecl *NewTemplate = nullptr;
   TemplateParameterList *TemplateParams = nullptr;
-  if (!getLangOpts().CPlusPlus) {
+
+  // Check if it is a CoroC Chan decl 
+  if (getLangOpts().CoroC && R == Context.ChanRefTy) {
+    ChanVarDecl *NewCVD = ChanVarDecl::Create(Context, DC, D.getLocStart(),
+                            D.getIdentifierLoc(), II,
+                            R, TInfo, SC);
+
+    // Set the elements' type
+    TypeSourceInfo *TSInfo = nullptr;
+    ParsedType PT;
+    D.getDeclSpec().GetChanElemType(PT);
+
+    QualType Ty = GetTypeFromParser(PT, &TSInfo);
+    if (!Ty.isNull()) {
+      NewCVD->setElemType(Ty);
+    }
+
+    NewVD = NewCVD;
+    if (D.isInvalidType())
+      NewVD->setInvalidDecl();
+
+  } else if (!getLangOpts().CPlusPlus) {
     NewVD = VarDecl::Create(Context, DC, D.getLocStart(),
                             D.getIdentifierLoc(), II,
                             R, TInfo, SC);
@@ -8288,6 +8320,36 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
     RealDecl->setInvalidDecl();
     return;
   }
+  
+  // Check if this is a CoroC Chan Decl & Init pair
+  ChanVarDecl *CVDecl = dyn_cast<ChanVarDecl>(RealDecl);
+  if (CVDecl != nullptr) {
+    CoroCMakeChanExpr *CE = dyn_cast<CoroCMakeChanExpr>(Init);
+    if (CE != nullptr) {
+      QualType OldType = CVDecl->getElemType();
+      QualType NewType = CE->getElemType();
+
+      if (OldType.isNull() || OldType == Context.VoidTy) {
+        CVDecl->setElemType(NewType);
+      } else {
+        // Check if two types are same
+        OldType = Context.getCanonicalType(OldType).getUnqualifiedType();
+        NewType = Context.getCanonicalType(NewType).getUnqualifiedType();
+        if (OldType != NewType) {
+          // TODO : Add a new diag type for this error !
+          Diag(RealDecl->getLocation(), diag::err_illegal_initializer);
+          RealDecl->setInvalidDecl();
+          return;
+        }
+      }
+    }
+  }
+
+  CoroCSpawnCallExpr *SpawnExpr = dyn_cast<CoroCSpawnCallExpr>(Init);
+  if (SpawnExpr) {
+    SpawnExpr->setInsertLoc(RealDecl->getSourceRange().getBegin());
+  }
+
   ParenListExpr *CXXDirectInit = dyn_cast<ParenListExpr>(Init);
 
   // C++11 [decl.spec.auto]p6. Deduce the type which 'auto' stands in for.
@@ -9554,6 +9616,17 @@ Decl *Sema::ActOnParamDeclarator(Scope *S, Declarator &D) {
   if (New->hasAttr<BlocksAttr>()) {
     Diag(New->getLocation(), diag::err_block_on_nonlocal);
   }
+
+  // Add the typename info into the ChanVarDecl
+  if (getLangOpts().CoroC && parmDeclType == Context.ChanRefTy) {
+    TypeSourceInfo *TSInfo = nullptr;
+    ParsedType PT;
+    DS.GetChanElemType(PT);
+
+    QualType Ty = GetTypeFromParser(PT, &TSInfo);
+    New->setElemType(Ty);
+  }
+
   return New;
 }
 

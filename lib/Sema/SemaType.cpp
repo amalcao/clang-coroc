@@ -1059,9 +1059,17 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     }
     break;
 
+  case DeclSpec::TST_task_t:
+    Result = Context.TaskRefTy;
+    break;
+
+  case DeclSpec::TST_chan_t:
+    Result = Context.ChanRefTy;
+    break;
+  // TODO: case DeclSpec::TST_refcnt_t: ...
+
   case DeclSpec::TST_error:
     Result = Context.IntTy;
-    declarator.setInvalidType(true);
     break;
   }
 

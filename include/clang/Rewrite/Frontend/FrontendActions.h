@@ -63,6 +63,12 @@ protected:
                                  StringRef InFile) override;
 };
 
+class RewriteCoroCAction : public ASTFrontendAction {
+protected:
+  ASTConsumer *CreateASTConsumer(CompilerInstance &CI,
+                                 StringRef InFile) override;
+};
+
 class RewriteMacrosAction : public PreprocessorFrontendAction {
 protected:
   void ExecuteAction() override;

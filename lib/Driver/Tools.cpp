@@ -2457,7 +2457,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Eonly");
     else {
       CmdArgs.push_back("-E");
-      if (Args.hasArg(options::OPT_rewrite_objc) &&
+      if ((Args.hasArg(options::OPT_rewrite_objc) ||
+           Args.hasArg(options::OPT_rewrite_coro_c)) &&
           !Args.hasArg(options::OPT_g_Group))
         CmdArgs.push_back("-P");
     }
@@ -2503,6 +2504,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     } else if (JA.getType() == types::TY_RewrittenLegacyObjC) {
       CmdArgs.push_back("-rewrite-objc");
       rewriteKind = RK_Fragile;
+    } else if (JA.getType() == types::TY_CoroC) {
+      CmdArgs.push_back("-fsyntax-only");
+      CmdArgs.push_back("-rewrite-coro-c"); // FIXME !!
+    } else if (JA.getType() == types::TY_RewriteCoroC) {
+      CmdArgs.push_back("-rewrite-coro-c");
     } else {
       assert(JA.getType() == types::TY_PP_Asm &&
              "Unexpected output type!");
@@ -3285,7 +3291,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // preprocessor.
   //
   // FIXME: Support -fpreprocessed
-  if (types::getPreprocessedType(InputType) != types::TY_INVALID)
+  if (types::getPreprocessedType(InputType) != types::TY_INVALID ||
+      InputType == types::TY_CoroC || InputType == types::TY_RewriteCoroC)
     AddPreprocessingOptions(C, JA, D, Args, CmdArgs, Output, Inputs);
 
   // Don't warn about "clang -c -DPIC -fPIC test.i" because libtool.m4 assumes

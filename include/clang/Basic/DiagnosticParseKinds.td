@@ -180,6 +180,7 @@ def err_expected_lparen_after : Error<"expected '(' after '%0'">;
 def err_expected_rparen_after : Error<"expected ')' after '%0'">;
 def err_expected_punc : Error<"expected ')' or ',' after '%0'">;
 def err_expected_less_after : Error<"expected '<' after '%0'">;
+def err_expected_greater_after : Error<"expected '>' after '%0'">;
 def err_expected_lbrace_in_compound_literal : Error<
   "expected '{' in compound literal">;
 def err_expected_while : Error<"expected 'while' in do/while loop">;
@@ -895,6 +896,13 @@ def err_seh___except_filter : Error<
 
 def err_seh___finally_block : Error<
   "%0 only allowed in __finally block">;
+
+// CoroC support.
+def err_coro_disable : Error<
+    "CoroC support disabled">;
+
+def err_typecheck_coro_sclass : Error<
+    "the '__chan_t' and '__task_t' cannot have any specifiers">;
 
 // OpenMP support.
 def warn_pragma_omp_ignored : Warning<

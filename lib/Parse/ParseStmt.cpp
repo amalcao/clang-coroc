@@ -89,7 +89,9 @@ StmtResult Parser::ParseStatement(SourceLocation *TrailingElseLoc) {
 ///         'break' ';'
 ///         'return' expression[opt] ';'
 /// [GNU]   'goto' '*' expression ';'
-///
+/// [CoC]   '__CoroC_Yield' ';'
+/// [CoC]   '__CoroC_Quit' expression[opt] ';'
+/// 
 /// [OBC] objc-throw-statement:
 /// [OBC]   '@' 'throw' expression ';'
 /// [OBC]   '@' 'throw' ';'
@@ -360,6 +362,34 @@ Retry:
   case tok::annot_pragma_loop_hint:
     ProhibitAttributes(Attrs);
     return ParsePragmaLoopHint(Stmts, OnlyStatement, TrailingElseLoc, Attrs);
+
+  case tok::kw___CoroC_Yield:
+  case tok::kw___CoroC_Quit:
+    if (!getLangOpts().CoroC) {
+        Diag(Tok, diag::err_coro_disable);
+        SkipUntil(tok::semi);
+        return StmtError();
+    }
+
+    if (Kind == tok::kw___CoroC_Yield) {
+        SemiError = "__CoroC_Yield";
+        Res = Actions.ActOnCoroCYieldStmt(ConsumeToken());
+    } else {
+        SourceLocation SL = ConsumeToken(); // eat the __CoroC_Quit
+        SemiError = "__CoroC_Quit";
+        ExprResult Expr;
+
+        if (Tok.isNot(tok::semi)) {
+            Expr = ParseExpression();
+            if (Expr.isInvalid()) {
+                Diag(Tok, diag::err_expected_expression);
+                SkipUntil(tok::semi);
+                return StmtError();
+            }
+        }
+        Res = Actions.ActOnCoroCQuitStmt(SL, Expr.get());
+    }
+    break;
   }
 
   // If we reached this code, the statement must end in a semicolon.

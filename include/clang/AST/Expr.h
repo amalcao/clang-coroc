@@ -4556,6 +4556,102 @@ public:
   child_range children() { return child_range(); }
 };
 
+/// \brief CoroCSpawnCallExpr - for __CoroC_Spawn keyword
+class CoroCSpawnCallExpr : public Expr {
+    CallExpr *TheCallExpr;
+    SourceLocation SpawnLoc; 
+    SourceLocation InsertLoc;
+
+    friend class ASTStmtReader;
+
+public:
+    CoroCSpawnCallExpr(SourceLocation SL, QualType T, CallExpr *E)
+        : Expr(CoroCSpawnCallExprClass, T, VK_RValue,
+                OK_Ordinary, false, false, false, false)
+        , TheCallExpr(E), SpawnLoc(SL), InsertLoc(SL) { }
+
+    /// \brief Build an empty block expression
+    explicit CoroCSpawnCallExpr(EmptyShell Empty) 
+        : Expr(CoroCSpawnCallExprClass, Empty) { }
+
+    const CallExpr *getCallExpr() const { return TheCallExpr; }
+    CallExpr *getCallExpr() { return TheCallExpr; }
+    void setCallExpr(CallExpr *E) { TheCallExpr = E; }
+
+    SourceLocation getLocStart() const LLVM_READONLY {
+      return SpawnLoc;
+    }
+    SourceLocation getLocEnd() const LLVM_READONLY {
+      return SpawnLoc;
+    }
+
+    SourceLocation getInsertLoc() const LLVM_READONLY {
+      return InsertLoc;
+    }
+    void setInsertLoc(SourceLocation SL) {
+      InsertLoc = SL;
+    }
+
+    static bool classof(const Stmt *T) {
+        return T->getStmtClass() == CoroCSpawnCallExprClass;
+    }
+
+    child_range children() { return child_range(); }
+};
+
+/// \brief CoroCMakeChanExpr - for __CoroC_Chan keyword
+class CoroCMakeChanExpr : public Expr {
+    QualType TheElemTy;
+    Expr *TheCapExpr;
+    SourceLocation ChanLoc;
+    SourceLocation GTLoc;
+    SourceRange TyRange;
+
+    friend class ASTStmtReader;
+
+public:
+    CoroCMakeChanExpr(SourceLocation SL, 
+                      SourceLocation GTL,
+                      SourceRange TR,
+                      QualType T, QualType ET, Expr *E)
+        : Expr(CoroCMakeChanExprClass, T, VK_RValue, 
+                OK_Ordinary, false, false, false, false)
+        , TheElemTy(ET), TheCapExpr(E), ChanLoc(SL), GTLoc(GTL), TyRange(TR) { }
+
+    /// \brief Build an empty expression
+    explicit CoroCMakeChanExpr(EmptyShell Empty)
+        : Expr(CoroCMakeChanExprClass, Empty) { }
+
+    const QualType getElemType() const { return TheElemTy; }
+    QualType getElemType() { return TheElemTy; }
+    void setElemType(QualType Ty) { TheElemTy = Ty; }
+
+    const Expr *getCapExpr() const { return TheCapExpr; }
+    Expr *getCapExpr() { return TheCapExpr; }
+    void setCapExpr(Expr *E) { TheCapExpr = E; }
+    
+    SourceLocation getGTLoc() const LLVM_READONLY {
+      return GTLoc;
+    }
+    
+    SourceRange getTyRange() const LLVM_READONLY {
+      return TyRange;
+    }
+
+    SourceLocation getLocStart() const LLVM_READONLY {
+      return ChanLoc;
+    }
+    SourceLocation getLocEnd() const LLVM_READONLY {
+      return ChanLoc;
+    }
+
+    static bool classof(const Stmt *T) {
+        return T->getStmtClass() == CoroCMakeChanExprClass;
+    }
+
+    child_range children() { return child_range(); }
+};
+
 /// AsTypeExpr - Clang builtin function __builtin_astype [OpenCL 6.2.4.2]
 /// This AST node provides support for reinterpreting a type to another
 /// type of the same size.

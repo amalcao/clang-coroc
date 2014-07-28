@@ -511,6 +511,7 @@ unsigned Decl::getIdentifierNamespaceForKind(Kind DeclKind) {
     case Var:
     case ImplicitParam:
     case ParmVar:
+    case ChanVar:
     case NonTypeTemplateParm:
     case ObjCMethod:
     case ObjCProperty:

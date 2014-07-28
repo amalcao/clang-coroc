@@ -969,6 +969,7 @@ void IndexingContext::getEntityInfo(const NamedDecl *D,
     case Decl::ParmVar:
       EntityInfo.kind = CXIdxEntity_Variable;
       break;
+    case Decl::ChanVar:
     case Decl::Var:
       EntityInfo.kind = CXIdxEntity_Variable;
       if (isa<CXXRecordDecl>(D->getDeclContext())) {

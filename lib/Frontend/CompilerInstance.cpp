@@ -846,6 +846,8 @@ static InputKind getSourceInputKindFromOptions(const LangOptions &LangOpts) {
     return IK_OpenCL;
   if (LangOpts.CUDA)
     return IK_CUDA;
+  if (LangOpts.CoroC)
+    return IK_CoroC;
   if (LangOpts.ObjC1)
     return LangOpts.CPlusPlus? IK_ObjCXX : IK_ObjC;
   return LangOpts.CPlusPlus? IK_CXX : IK_C;

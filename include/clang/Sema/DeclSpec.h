@@ -285,6 +285,9 @@ public:
   static const TST TST_auto = clang::TST_auto;
   static const TST TST_unknown_anytype = clang::TST_unknown_anytype;
   static const TST TST_atomic = clang::TST_atomic;
+  static const TST TST_task_t = clang::TST_task_t;
+  static const TST TST_chan_t = clang::TST_chan_t;
+  static const TST TST_refcnt_t = clang::TST_refcnt_t;
   static const TST TST_error = clang::TST_error;
 
   // type-qualifiers
@@ -345,6 +348,8 @@ private:
     Decl *DeclRep;
     Expr *ExprRep;
   };
+
+  ParsedType ChanElemTy;
 
   // attributes.
   ParsedAttributes Attrs;
@@ -637,6 +642,14 @@ public:
                        const char *&PrevSpec, unsigned &DiagID,
                        const PrintingPolicy &Policy);
   bool SetTypeSpecError();
+
+  void SetChanElemType(ParsedType Ty) {
+    ChanElemTy = Ty;
+  }
+  void GetChanElemType(ParsedType &Ty) const {
+    Ty = ChanElemTy;
+  }
+
   void UpdateDeclRep(Decl *Rep) {
     assert(isDeclRep((TST) TypeSpecType));
     DeclRep = Rep;
