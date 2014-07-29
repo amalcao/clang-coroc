@@ -5279,8 +5279,11 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
+  QualType BaseTy = R;
+  if (R->isArrayType())
+	BaseTy = Context.getBaseElementType(R);
   if (getLangOpts().CoroC) {
-    if (R == Context.TaskRefTy || R == Context.ChanRefTy) {
+    if (BaseTy == Context.TaskRefTy || BaseTy == Context.ChanRefTy) {
       // The `__task_t' and `__chan_t' cannot have any specifiers!!
       if (SC != SC_None) {
         Diag(D.getDeclSpec().getStorageClassSpecLoc(), 
@@ -5331,7 +5334,7 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   TemplateParameterList *TemplateParams = nullptr;
 
   // Check if it is a CoroC Chan decl 
-  if (getLangOpts().CoroC && R == Context.ChanRefTy) {
+  if (getLangOpts().CoroC && BaseTy == Context.ChanRefTy) {
     ChanVarDecl *NewCVD = ChanVarDecl::Create(Context, DC, D.getLocStart(),
                             D.getIdentifierLoc(), II,
                             R, TInfo, SC);

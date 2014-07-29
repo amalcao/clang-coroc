@@ -1597,6 +1597,12 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getIntWidth();
       Align = Target->getIntAlign();
       break;
+	
+	case BuiltinType::ChanRef:
+	case BuiltinType::TaskRef:
+	case BuiltinType::GeneralRef:
+	  // The Refs in CoroC should be treated as a pointer
+
     case BuiltinType::OCLEvent:
     case BuiltinType::OCLImage1d:
     case BuiltinType::OCLImage1dArray:

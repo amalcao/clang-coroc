@@ -93,6 +93,7 @@ namespace {
     Token getNextTok(SourceLocation CurLoc);
     SourceLocation getNextTokLocStart(SourceLocation CurLoc);
     ThunkHelper *getOrCreateThunkHelper(CallExpr *C);
+	bool rewriteCoroCRefTy(Expr *E);
 
   public:
     CoroCRecursiveASTVisitor(Rewriter &R, ASTContext *C) 
@@ -102,7 +103,7 @@ namespace {
  
     void DumpThunkHelpers(std::ostream&);
      
-    bool VisitVarDecl(VarDecl *D);
+	bool VisitValueDecl(ValueDecl *D);
     bool VisitFunctionDecl(FunctionDecl *D);
 
     bool VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E);
@@ -110,8 +111,11 @@ namespace {
     bool VisitCoroCYieldStmt(CoroCYieldStmt *S);
     bool VisitCoroCQuitStmt(CoroCQuitStmt *S);
     
+	bool VisitArraySubscriptExpr(ArraySubscriptExpr *E);
     bool VisitDeclRefExpr(DeclRefExpr *E);
-    Expr *VisitBinaryOperator(BinaryOperator *B);
+    bool VisitMemberExpr(MemberExpr *E);
+
+	Expr *VisitBinaryOperator(BinaryOperator *B);
 
     bool HasMain() { return hasMain; }
   };
@@ -356,10 +360,18 @@ bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
   return true;
 }
 
+#if 0
 /// Override the VarDecl when the var is a CoroC refcnt type
 bool CoroCRecursiveASTVisitor::VisitVarDecl(VarDecl *D) {
+#else
+/// Override the ValueDecl when the type is CoroC Ref
+bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
+#endif
   // Determine the type of the var
   QualType Ty = D->getType();
+  if (Ty->isArrayType())
+    Ty = Context->getBaseElementType(Ty);
+
   if (Ty == Context->TaskRefTy ||
       Ty == Context->ChanRefTy) {
     SourceLocation StartLoc = D->getSourceRange().getBegin();
@@ -375,36 +387,39 @@ bool CoroCRecursiveASTVisitor::VisitVarDecl(VarDecl *D) {
       Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
     }
 
-    if (D->hasInit()) {
-      std::stringstream SS;
-      SS << "\n\t__CXX_refcnt_t<"
-         << Ty.getAsString() << " > "
-         << D->getNameAsString() << "; \n\t";
-
-      Rewrite.InsertText(StartLoc, SS.str());
-
-      int offset = Lexer::MeasureTokenLength(StartLoc,
-                                             Rewrite.getSourceMgr(),
-                                             Rewrite.getLangOpts());
-      Rewrite.ReplaceText(StartLoc, offset, "");
-
-    } else {
-      Rewrite.InsertText(StartLoc, "__CXX_refcnt_t<");
-      Rewrite.InsertTextAfterToken(StartLoc, " >");
-    }
+    Rewrite.InsertText(StartLoc, "__CXX_refcnt_t<");
+    Rewrite.InsertTextAfterToken(StartLoc, " >");
   }
   return true;
 }
 
-/// Find and fix the ChanRef & TaskRef
-bool CoroCRecursiveASTVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
+
+/// Find and fix the ChanRef & TaskRef if they are as the array elements
+bool CoroCRecursiveASTVisitor::rewriteCoroCRefTy(Expr *E) {
   // Determine the type of the ref
   QualType Ty = E->getType();
   if (Ty == Context->TaskRefTy || Ty == Context->ChanRefTy)  {
-    if (!E->isLValue())
-      Rewrite.InsertText(E->getLocStart(), "*");
+    if (!E->isLValue()) {
+      Rewrite.InsertText(E->getLocStart(), "*(");
+	  Rewrite.InsertTextAfterToken(E->getLocEnd(), ")");
+	}
   }
   return true;
+}
+
+/// Find and fix the ChanRef & TaskRef if they are as the array elements
+bool CoroCRecursiveASTVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
+  return rewriteCoroCRefTy(E);
+}
+
+/// Find and fix the ChanRef & TaskRef if they are as the struct / union members
+bool CoroCRecursiveASTVisitor::VisitMemberExpr(MemberExpr *E) {
+  return rewriteCoroCRefTy(E);
+}
+
+/// Find and fix the ChanRef & TaskRef
+bool CoroCRecursiveASTVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
+  return rewriteCoroCRefTy(E);
 }
 
 /// Override the BinaryOperator when it is a CoroC channel operation

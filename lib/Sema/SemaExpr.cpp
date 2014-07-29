@@ -7507,22 +7507,62 @@ static void DiagnoseBadShiftValues(Sema& S, ExprResult &LHS, ExprResult &RHS,
     << RHS.get()->getSourceRange();
 }
 
+namespace {
+  /// The simple visitor to collect all the DeclRefExpr nodes..
+  class ChanDeclCollector : public RecursiveASTVisitor<ChanDeclCollector> {
+    std::vector<ValueDecl*> Collector;
+	ASTContext *Ctx;
+
+	bool isChanRefTy(Expr *E) {
+	  QualType Ty = E->getType();
+	  if (Ty->isArrayType()) {
+	    Ty = Ctx->getBaseElementType(Ty);
+	  }
+	  return (Ty == Ctx->ChanRefTy);
+	}
+
+  public:
+    ChanDeclCollector(ASTContext *C) : Ctx(C) {} 
+    bool VisitDeclRefExpr(DeclRefExpr *E) {
+	  if (isChanRefTy(E))
+	    Collector.push_back(E->getDecl());
+	  return true;
+	}
+
+	bool VisitMemberExpr(MemberExpr *E) {
+	  if (isChanRefTy(E))
+	    Collector.push_back(E->getMemberDecl());
+	  return true;
+	}
+
+	const std::vector<ValueDecl*>& GetCollector (void) const {
+	  return Collector;
+	}
+	std::vector<ValueDecl*>& GetCollector (void) {
+	  return Collector;
+	}
+  };
+}
+
 // CoroC Channel Send/Recv
 QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
                                  SourceLocation Loc, unsigned Opc) {
     // Check if the operand is CoroC channel send / recv
     if (LangOpts.CoroC && 
         LHS.get()->getType() == Context.ChanRefTy) {
+      // Find the DeclRefExpr nodes in LHS
+	  ChanDeclCollector Visitor(&Context);
+	  Visitor.TraverseStmt(LHS.get());
+	  std::vector<ValueDecl*>& Collector = Visitor.GetCollector();
+	  assert (Collector.size() == 1); // FIXME
+      LHS.get()->setValueKind(VK_RValue); // directly change the value type
 
       // Check if the type of RHS is equal to the channel elements' type!
-      DeclRefExpr *DRef = dyn_cast<DeclRefExpr>(LHS.get());
-      assert (DRef != nullptr);
-      DRef->setValueKind(VK_RValue); // directly change the value type
-
-      // Get the ChanVarDecl of the DRef
-      ChanVarDecl *CVDecl = dyn_cast<ChanVarDecl>(DRef->getDecl());
+	  ValueDecl *VD = Collector[0];
+      // Get the ChanVarDecl 
+      ChanVarDecl *CVDecl = dyn_cast<ChanVarDecl>(VD);
       if (CVDecl == nullptr) 
-        CVDecl = dyn_cast<ParmVarDecl>(DRef->getDecl());
+        CVDecl = dyn_cast<ParmVarDecl>(VD);
 
       if (CVDecl != nullptr) {
         QualType LHSType = CVDecl->getElemType();
