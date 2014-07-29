@@ -799,6 +799,18 @@ void Clang::AddARMTargetArgs(const ArgList &Args,
     CmdArgs.push_back("-arm-use-movt=0");
   }
 
+  // -mkernel implies -mstrict-align; don't add the redundant option.
+  if (!KernelOrKext) {
+    if (Arg *A = Args.getLastArg(options::OPT_mno_unaligned_access,
+                                 options::OPT_munaligned_access)) {
+      CmdArgs.push_back("-backend-option");
+      if (A->getOption().matches(options::OPT_mno_unaligned_access))
+        CmdArgs.push_back("-arm-strict-align");
+      else
+        CmdArgs.push_back("-arm-no-strict-align");
+    }
+  }
+
   // Setting -mno-global-merge disables the codegen global merge pass. Setting 
   // -mglobal-merge has no effect as the pass is enabled by default.
   if (Arg *A = Args.getLastArg(options::OPT_mglobal_merge,
@@ -873,9 +885,13 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName);
 
-  if (Args.hasArg(options::OPT_mstrict_align)) {
+  if (Arg *A = Args.getLastArg(options::OPT_mno_unaligned_access,
+                               options::OPT_munaligned_access)) {
     CmdArgs.push_back("-backend-option");
-    CmdArgs.push_back("-aarch64-strict-align");
+    if (A->getOption().matches(options::OPT_mno_unaligned_access))
+      CmdArgs.push_back("-aarch64-strict-align");
+    else
+      CmdArgs.push_back("-aarch64-no-strict-align");
   }
 
   // Setting -mno-global-merge disables the codegen global merge pass. Setting
@@ -1226,6 +1242,35 @@ static void getPPCTargetFeatures(const ArgList &Args,
   // Altivec is a bit weird, allow overriding of the Altivec feature here.
   AddTargetFeature(Args, Features, options::OPT_faltivec,
                    options::OPT_fno_altivec, "altivec");
+}
+
+void Clang::AddPPCTargetArgs(const ArgList &Args,
+                             ArgStringList &CmdArgs) const {
+  // Select the ABI to use.
+  const char *ABIName = nullptr;
+  if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
+    ABIName = A->getValue();
+  } else if (getToolChain().getTriple().isOSLinux())
+    switch(getToolChain().getArch()) {
+    case llvm::Triple::ppc64:
+      ABIName = "elfv1";
+      break;
+    case llvm::Triple::ppc64le:
+      ABIName = "elfv2";
+      break;
+    default:
+      break;
+  }
+
+  if (ABIName) {
+    CmdArgs.push_back("-target-abi");
+    CmdArgs.push_back(ABIName);
+  }
+}
+
+bool ppc::hasPPCAbiArg(const ArgList &Args, const char *Value) {
+  Arg *A = Args.getLastArg(options::OPT_mabi_EQ);
+  return A && (A->getValue() == StringRef(Value));
 }
 
 /// Get the (LLVM) name of the R600 gpu we are targeting.
@@ -3027,6 +3072,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     AddMIPSTargetArgs(Args, CmdArgs);
     break;
 
+  case llvm::Triple::ppc:
+  case llvm::Triple::ppc64:
+  case llvm::Triple::ppc64le:
+    AddPPCTargetArgs(Args, CmdArgs);
+    break;
+
   case llvm::Triple::sparc:
   case llvm::Triple::sparcv9:
     AddSparcTargetArgs(Args, CmdArgs);
@@ -3644,27 +3695,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_mstack_alignment)) {
     StringRef alignment = Args.getLastArgValue(options::OPT_mstack_alignment);
     CmdArgs.push_back(Args.MakeArgString("-mstack-alignment=" + alignment));
-  }
-  // -mkernel implies -mstrict-align; don't add the redundant option.
-  if (!KernelOrKext) {
-    if (Arg *A = Args.getLastArg(options::OPT_mno_unaligned_access,
-                                 options::OPT_munaligned_access)) {
-      if (A->getOption().matches(options::OPT_mno_unaligned_access)) {
-        CmdArgs.push_back("-backend-option");
-        if (getToolChain().getTriple().getArch() == llvm::Triple::aarch64 ||
-            getToolChain().getTriple().getArch() == llvm::Triple::aarch64_be)
-          CmdArgs.push_back("-aarch64-strict-align");
-        else
-          CmdArgs.push_back("-arm-strict-align");
-      } else {
-        CmdArgs.push_back("-backend-option");
-        if (getToolChain().getTriple().getArch() == llvm::Triple::aarch64 ||
-            getToolChain().getTriple().getArch() == llvm::Triple::aarch64_be)
-          CmdArgs.push_back("-aarch64-no-strict-align");
-        else
-          CmdArgs.push_back("-arm-no-strict-align");
-      }
-    }
   }
 
   if (Arg *A = Args.getLastArg(options::OPT_mrestrict_it,
@@ -7219,11 +7249,16 @@ static StringRef getLinuxDynamicLinker(const ArgList &Args,
                ? "/lib64/ld-linux-mipsn8.so.1" : "/lib64/ld.so.1";
   } else if (ToolChain.getArch() == llvm::Triple::ppc)
     return "/lib/ld.so.1";
-  else if (ToolChain.getArch() == llvm::Triple::ppc64 ||
-           ToolChain.getArch() == llvm::Triple::systemz)
+  else if (ToolChain.getArch() == llvm::Triple::ppc64) {
+    if (ppc::hasPPCAbiArg(Args, "elfv2"))
+      return "/lib64/ld64.so.2";
     return "/lib64/ld64.so.1";
-  else if (ToolChain.getArch() == llvm::Triple::ppc64le)
+  } else if (ToolChain.getArch() == llvm::Triple::ppc64le) {
+    if (ppc::hasPPCAbiArg(Args, "elfv1"))
+      return "/lib64/ld64.so.1";
     return "/lib64/ld64.so.2";
+  } else if (ToolChain.getArch() == llvm::Triple::systemz)
+    return "/lib64/ld64.so.1";
   else if (ToolChain.getArch() == llvm::Triple::sparcv9)
     return "/lib64/ld-linux.so.2";
   else if (ToolChain.getArch() == llvm::Triple::x86_64 &&
