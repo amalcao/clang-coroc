@@ -1778,8 +1778,6 @@ bool RecursiveASTVisitor<Derived>::TraverseVarHelper(VarDecl *D) {
 
 DEF_TRAVERSE_DECL(VarDecl, { TRY_TO(TraverseVarHelper(D)); })
 
-DEF_TRAVERSE_DECL(ChanVarDecl, { TRY_TO(TraverseVarHelper(D)); })
-
 DEF_TRAVERSE_DECL(VarTemplateSpecializationDecl, {
   // For implicit instantiations, we don't want to
   // recurse at all, since the instatiated class isn't written in

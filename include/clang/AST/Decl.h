@@ -470,11 +470,14 @@ public:
 class ValueDecl : public NamedDecl {
   void anchor() override;
   QualType DeclType;
+  QualType ChanElemType;
+  bool ChanDecl;
 
 protected:
   ValueDecl(Kind DK, DeclContext *DC, SourceLocation L,
             DeclarationName N, QualType T)
-    : NamedDecl(DK, DC, L, N), DeclType(T) {}
+    : NamedDecl(DK, DC, L, N), DeclType(T)
+	, ChanDecl(false) {}
 public:
   QualType getType() const { return DeclType; }
   void setType(QualType newType) { DeclType = newType; }
@@ -482,6 +485,14 @@ public:
   /// \brief Determine whether this symbol is weakly-imported,
   ///        or declared with the weak or weak-ref attr.
   bool isWeak() const;
+
+  /// \brief The elements' type if it is a CoroC channel.
+  QualType getChanElemType() const { return ChanElemType; }
+  void setChanElemType(QualType Ty) { ChanElemType = Ty; }
+
+  /// \brief Determine whether this decl is the CoroC channel.
+  void setChanDecl() { ChanDecl = true; }
+  bool isChanDecl() { return ChanDecl; }
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
@@ -1229,45 +1240,8 @@ public:
   static bool classofKind(Kind K) { return K == ImplicitParam; }
 };
 
-/// ChanVarDecl - An instance of this class is created to represent a 
-/// CoroC __chan_t declaration (or definition).
-class ChanVarDecl : public VarDecl {
-  QualType ElemType;
-
-protected:
-  ChanVarDecl(Kind DK, ASTContext &C, DeclContext *DC, SourceLocation StartLoc,
-                 SourceLocation IdLoc, IdentifierInfo *Id, QualType T,
-                 TypeSourceInfo *TInfo, StorageClass SC)
-    : VarDecl(DK, C, DC, StartLoc, IdLoc, Id, T, TInfo, SC) { }
- 
-public:
-  static ChanVarDecl *Create(ASTContext &C, DeclContext *DC,
-                         SourceLocation StartLoc, SourceLocation IdLoc,
-                         IdentifierInfo *Id, QualType T, TypeSourceInfo *TInfo,
-                         StorageClass S);
-  static ChanVarDecl *CreateDeserialized(ASTContext &C, unsigned ID);
-
-  
-  QualType getElemType() { return ElemType; }
-  const QualType getElemType() const { return ElemType; }
-  void setElemType(QualType Ty) { 
-    const TypedefType *TT;
-    if (!Ty.isNull() && 
-        (TT = dyn_cast<TypedefType>(Ty.getTypePtr()))) { 
-      ElemType = TT->desugar();
-    } else {
-      ElemType = Ty; 
-    }
-  }
-
-  // Implement isa/cast/dyncast/etc.
-  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
-  static bool classofKind(Kind K) { return K == ChanVar; }
-};
-
-
 /// ParmVarDecl - Represents a parameter to a function.
-class ParmVarDecl : public ChanVarDecl {
+class ParmVarDecl : public VarDecl {
 public:
   enum { MaxFunctionScopeDepth = 255 };
   enum { MaxFunctionScopeIndex = 255 };
@@ -1276,7 +1250,7 @@ protected:
   ParmVarDecl(Kind DK, ASTContext &C, DeclContext *DC, SourceLocation StartLoc,
               SourceLocation IdLoc, IdentifierInfo *Id, QualType T,
               TypeSourceInfo *TInfo, StorageClass S, Expr *DefArg)
-      : ChanVarDecl(DK, C, DC, StartLoc, IdLoc, Id, T, TInfo, S) {
+      : VarDecl(DK, C, DC, StartLoc, IdLoc, Id, T, TInfo, S) {
     assert(ParmVarDeclBits.HasInheritedDefaultArg == false);
     assert(ParmVarDeclBits.IsKNRPromoted == false);
     assert(ParmVarDeclBits.IsObjCMethodParam == false);

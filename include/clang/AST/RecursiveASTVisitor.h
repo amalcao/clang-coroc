@@ -1853,8 +1853,6 @@ DEF_TRAVERSE_DECL(ParmVarDecl, {
     TRY_TO(TraverseStmt(D->getDefaultArg()));
 })
 
-DEF_TRAVERSE_DECL(ChanVarDecl, { TRY_TO(TraverseVarHelper(D)); })
-
 #undef DEF_TRAVERSE_DECL
 
 // ----------------- Stmt traversal -----------------

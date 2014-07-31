@@ -2797,7 +2797,6 @@ ExprResult Sema::BuildDeclarationNameExpr(
     }
 
     case Decl::Var:
-    case Decl::ChanVar:
     case Decl::VarTemplateSpecialization:
     case Decl::VarTemplatePartialSpecialization:
       // In C, "extern void blah;" is valid and is an r-value.
@@ -7559,13 +7558,9 @@ QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
 
       // Check if the type of RHS is equal to the channel elements' type!
 	  ValueDecl *VD = Collector[0];
-      // Get the ChanVarDecl 
-      ChanVarDecl *CVDecl = dyn_cast<ChanVarDecl>(VD);
-      if (CVDecl == nullptr) 
-        CVDecl = dyn_cast<ParmVarDecl>(VD);
 
-      if (CVDecl != nullptr) {
-        QualType LHSType = CVDecl->getElemType();
+      if (VD->isChanDecl()) {
+        QualType LHSType = VD->getChanElemType();
         if (LHSType.isNull()) {
           Diag(Loc, diag::err_chan_not_init)
              << LHS.get()->getSourceRange();

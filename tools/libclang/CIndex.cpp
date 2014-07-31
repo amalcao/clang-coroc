@@ -4876,7 +4876,6 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
   }
 
   case Decl::Var:
-  case Decl::ChanVar:
   case Decl::VarTemplateSpecialization:
   case Decl::VarTemplatePartialSpecialization: {
     // Ask the variable if it has a definition.

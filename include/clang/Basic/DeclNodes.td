@@ -48,8 +48,7 @@ def Named : Decl<1>;
           def VarTemplatePartialSpecialization
             : DDecl<VarTemplateSpecialization>;
         def ImplicitParam : DDecl<Var>;
-        def ChanVar : DDecl<Var>;
-          def ParmVar : DDecl<ChanVar>;
+        def ParmVar : DDecl<Var>;
       def NonTypeTemplateParm : DDecl<Declarator>;
   def Template : DDecl<Named, 1>;
     def RedeclarableTemplate : DDecl<Template, 1>;

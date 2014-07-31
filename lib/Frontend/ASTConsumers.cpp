@@ -437,11 +437,6 @@ void DeclContextPrinter::PrintDeclContext(const DeclContext* DC,
       Out << "<parameter> " << *PVD << '\n';
       break;
     }
-    case Decl::ChanVar: {
-      VarDecl* VD = cast<VarDecl>(I);
-      Out << "<chan var> " << *VD << '\n';
-      break;
-    }
     case Decl::ObjCProperty: {
       ObjCPropertyDecl* OPD = cast<ObjCPropertyDecl>(I);
       Out << "<objc property> " << *OPD << '\n';

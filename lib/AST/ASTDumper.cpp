@@ -1040,15 +1040,6 @@ void ASTDumper::VisitVarDecl(const VarDecl *D) {
   }
 }
 
-#if 0
-void ASTDumper::VisitChanVarDecl(const ChanVarDecl *D) {
-  VisitVarDecl(D);
-  OS << " <<";
-  dumpType(D->getElemType());
-  OS << ">>";
-}
-#endif
-
 void ASTDumper::VisitFileScopeAsmDecl(const FileScopeAsmDecl *D) {
   lastChild();
   dumpStmt(D->getAsmString());
