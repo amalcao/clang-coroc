@@ -88,3 +88,45 @@ void test_mm512_store_pd(void *p, __m512d a)
   // CHECK: store <8 x double>
   _mm512_store_pd(p, a);
 }
+
+__m512 test_mm512_loadu_ps(void *p)
+{
+  // CHECK-LABEL: @test_mm512_loadu_ps
+  // CHECK: load <16 x float>* {{.*}}, align 1{{$}}
+  return _mm512_loadu_ps(p);
+}
+
+__m512d test_mm512_loadu_pd(void *p)
+{
+  // CHECK-LABEL: @test_mm512_loadu_pd
+  // CHECK: load <8 x double>* {{.*}}, align 1{{$}}
+  return _mm512_loadu_pd(p);
+}
+
+__m512d test_mm512_set1_pd(double d)
+{
+  // CHECK-LABEL: @test_mm512_set1_pd
+  // CHECK: insertelement <8 x double> {{.*}}, i32 0
+  // CHECK: insertelement <8 x double> {{.*}}, i32 1
+  // CHECK: insertelement <8 x double> {{.*}}, i32 2
+  // CHECK: insertelement <8 x double> {{.*}}, i32 3
+  // CHECK: insertelement <8 x double> {{.*}}, i32 4
+  // CHECK: insertelement <8 x double> {{.*}}, i32 5
+  // CHECK: insertelement <8 x double> {{.*}}, i32 6
+  // CHECK: insertelement <8 x double> {{.*}}, i32 7
+  return _mm512_set1_pd(d);
+}
+
+__m512d test_mm512_castpd256_pd512(__m256d a)
+{
+  // CHECK-LABEL: @test_mm512_castpd256_pd512
+  // CHECK: shufflevector <4 x double> {{.*}} <i32 0, i32 1, i32 2, i32 3, i32 undef, i32 undef, i32 undef, i32 undef>
+  return _mm512_castpd256_pd512(a);
+}
+
+__mmask16 test_mm512_knot(__mmask16 a)
+{
+  // CHECK-LABEL: @test_mm512_knot
+  // CHECK: @llvm.x86.avx512.knot.w
+  return _mm512_knot(a);
+}

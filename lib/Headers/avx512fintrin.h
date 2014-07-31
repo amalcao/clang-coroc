@@ -91,6 +91,59 @@ _mm512_setzero_pd(void)
   return (__m512d){ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 }
 
+static __inline __m512 __attribute__((__always_inline__, __nodebug__))
+_mm512_set1_ps(float __w)
+{
+  return (__m512){ __w, __w, __w, __w, __w, __w, __w, __w,
+                   __w, __w, __w, __w, __w, __w, __w, __w  };
+}
+
+static __inline __m512d __attribute__((__always_inline__, __nodebug__))
+_mm512_set1_pd(double __w)
+{
+  return (__m512d){ __w, __w, __w, __w, __w, __w, __w, __w };
+}
+
+static __inline __m512i __attribute__((__always_inline__, __nodebug__))
+_mm512_set1_epi32(int __s)
+{
+  return (__m512i)(__v16si){ __s, __s, __s, __s, __s, __s, __s, __s,
+                             __s, __s, __s, __s, __s, __s, __s, __s };
+}
+
+static __inline __m512i __attribute__((__always_inline__, __nodebug__))
+_mm512_set1_epi64(long long __d)
+{
+  return (__m512i)(__v8di){ __d, __d, __d, __d, __d, __d, __d, __d };
+}
+
+/* Cast between vector types */
+
+static __inline __m512d __attribute__((__always_inline__, __nodebug__))
+_mm512_castpd256_pd512(__m256d __a)
+{
+  return __builtin_shufflevector(__a, __a, 0, 1, 2, 3, -1, -1, -1, -1);
+}
+
+static __inline __m512 __attribute__((__always_inline__, __nodebug__))
+_mm512_castps256_ps512(__m256 __a)
+{
+  return __builtin_shufflevector(__a, __a, 0,  1,  2,  3,  4,  5,  6,  7,
+                                          -1, -1, -1, -1, -1, -1, -1, -1);
+}
+
+static __inline __m128d __attribute__((__always_inline__, __nodebug__))
+_mm512_castpd512_pd128(__m512d __a)
+{
+  return __builtin_shufflevector(__a, __a, 0, 1);
+}
+
+static __inline __m128 __attribute__((__always_inline__, __nodebug__))
+_mm512_castps512_ps128(__m512 __a)
+{
+  return __builtin_shufflevector(__a, __a, 0, 1, 2, 3);
+}
+
 /* Arithmetic */
 
 static __inline __m512d __attribute__((__always_inline__, __nodebug__))
@@ -738,6 +791,24 @@ _mm512_maskz_loadu_pd(__mmask8 __U, void const *__P)
                                                    (__mmask8) __U);
 }
 
+static __inline __m512d __attribute__((__always_inline__, __nodebug__))
+_mm512_loadu_pd(double const *__p)
+{
+  struct __loadu_pd {
+    __m512d __v;
+  } __attribute__((packed, may_alias));
+  return ((struct __loadu_pd*)__p)->__v;
+}
+
+static __inline __m512 __attribute__((__always_inline__, __nodebug__))
+_mm512_loadu_ps(float const *__p)
+{
+  struct __loadu_ps {
+    __m512 __v;
+  } __attribute__((packed, may_alias));
+  return ((struct __loadu_ps*)__p)->__v;
+}
+
 /* SIMD store ops */
 
 static __inline void __attribute__ ((__always_inline__, __nodebug__))
@@ -789,6 +860,14 @@ static __inline void __attribute__ ((__always_inline__, __nodebug__))
 _mm512_store_pd(void *__P, __m512d __A)
 {
   *(__m512d*)__P = __A;
+}
+
+/* Mask ops */
+
+static __inline __mmask16 __attribute__ ((__always_inline__, __nodebug__))
+_mm512_knot(__mmask16 __M)
+{
+  return __builtin_ia32_knothi(__M);
 }
 
 #endif // __AVX512FINTRIN_H
