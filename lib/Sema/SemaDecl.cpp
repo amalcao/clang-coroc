@@ -5047,7 +5047,7 @@ static void checkDLLAttributeRedeclaration(Sema &S, NamedDecl *OldDecl,
   }
 
   // A redeclaration is not allowed to drop a dllimport attribute, the only
-  // exception being inline function definitions.
+  // exceptions being inline function definitions and local extern declarations.
   // NB: MSVC converts such a declaration to dllexport.
   bool IsInline = false, IsStaticDataMember = false;
   if (const auto *VD = dyn_cast<VarDecl>(NewDecl))
@@ -5057,7 +5057,8 @@ static void checkDLLAttributeRedeclaration(Sema &S, NamedDecl *OldDecl,
   else if (const auto *FD = dyn_cast<FunctionDecl>(NewDecl))
     IsInline = FD->isInlined();
 
-  if (OldImportAttr && !HasNewAttr && !IsInline && !IsStaticDataMember) {
+  if (OldImportAttr && !HasNewAttr && !IsInline && !IsStaticDataMember &&
+      !NewDecl->isLocalExternDecl()) {
     S.Diag(NewDecl->getLocation(),
            diag::warn_redeclaration_without_attribute_prev_attribute_ignored)
       << NewDecl << OldImportAttr;
@@ -7127,12 +7128,10 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     const FunctionProtoType *FPT = R->getAs<FunctionProtoType>();
     if ((Name.getCXXOverloadedOperator() == OO_Delete ||
          Name.getCXXOverloadedOperator() == OO_Array_Delete) &&
-        getLangOpts().CPlusPlus11 && FPT && !FPT->hasExceptionSpec()) {
-      FunctionProtoType::ExtProtoInfo EPI = FPT->getExtProtoInfo();
-      EPI.ExceptionSpecType = EST_BasicNoexcept;
-      NewFD->setType(Context.getFunctionType(FPT->getReturnType(),
-                                             FPT->getParamTypes(), EPI));
-    }
+        getLangOpts().CPlusPlus11 && FPT && !FPT->hasExceptionSpec())
+      NewFD->setType(Context.getFunctionType(
+          FPT->getReturnType(), FPT->getParamTypes(),
+          FPT->getExtProtoInfo().withExceptionSpec(EST_BasicNoexcept)));
   }
 
   // Filter out previous declarations that don't match the scope.
@@ -7839,6 +7838,18 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
   }
 
   // Semantic checking for this function declaration (in isolation).
+
+  // Diagnose the use of X86 fastcall on unprototyped functions.
+  QualType NewQType = Context.getCanonicalType(NewFD->getType());
+  const FunctionType *NewType = cast<FunctionType>(NewQType);
+  if (isa<FunctionNoProtoType>(NewType)) {
+    FunctionType::ExtInfo NewTypeInfo = NewType->getExtInfo();
+    if (NewTypeInfo.getCC() == CC_X86FastCall)
+      Diag(NewFD->getLocation(), diag::err_cconv_knr)
+          << FunctionType::getNameForCallConv(CC_X86FastCall);
+    // TODO: Also diagnose unprototyped stdcall functions?
+  }
+
   if (getLangOpts().CPlusPlus) {
     // C++-specific checks.
     if (CXXConstructorDecl *Constructor = dyn_cast<CXXConstructorDecl>(NewFD)) {

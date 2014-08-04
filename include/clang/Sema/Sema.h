@@ -1181,7 +1181,7 @@ public:
   const FunctionProtoType *ResolveExceptionSpec(SourceLocation Loc,
                                                 const FunctionProtoType *FPT);
   void UpdateExceptionSpec(FunctionDecl *FD,
-                           const FunctionProtoType::ExtProtoInfo &EPI);
+                           const FunctionProtoType::ExceptionSpecInfo &ESI);
   bool CheckSpecifiedExceptionType(QualType &T, const SourceRange &Range);
   bool CheckDistantExceptionSpec(QualType T);
   bool CheckEquivalentExceptionSpec(FunctionDecl *Old, FunctionDecl *New);
@@ -3953,24 +3953,20 @@ public:
 
     /// \brief Overwrite an EPI's exception specification with this
     /// computed exception specification.
-    void getEPI(FunctionProtoType::ExtProtoInfo &EPI) const {
-      EPI.ExceptionSpecType = getExceptionSpecType();
-      if (EPI.ExceptionSpecType == EST_Dynamic) {
-        EPI.NumExceptions = size();
-        EPI.Exceptions = data();
-      } else if (EPI.ExceptionSpecType == EST_None) {
+    FunctionProtoType::ExceptionSpecInfo getExceptionSpec() const {
+      FunctionProtoType::ExceptionSpecInfo ESI;
+      ESI.Type = getExceptionSpecType();
+      if (ESI.Type == EST_Dynamic) {
+        ESI.Exceptions = Exceptions;
+      } else if (ESI.Type == EST_None) {
         /// C++11 [except.spec]p14:
         ///   The exception-specification is noexcept(false) if the set of
         ///   potential exceptions of the special member function contains "any"
-        EPI.ExceptionSpecType = EST_ComputedNoexcept;
-        EPI.NoexceptExpr = Self->ActOnCXXBoolLiteral(SourceLocation(),
+        ESI.Type = EST_ComputedNoexcept;
+        ESI.NoexceptExpr = Self->ActOnCXXBoolLiteral(SourceLocation(),
                                                      tok::kw_false).get();
       }
-    }
-    FunctionProtoType::ExtProtoInfo getEPI() const {
-      FunctionProtoType::ExtProtoInfo EPI;
-      getEPI(EPI);
-      return EPI;
+      return ESI;
     }
   };
 
@@ -4017,13 +4013,13 @@ public:
   void EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD);
 
   /// \brief Check the given exception-specification and update the
-  /// extended prototype information with the results.
+  /// exception specification information with the results.
   void checkExceptionSpecification(ExceptionSpecificationType EST,
                                    ArrayRef<ParsedType> DynamicExceptions,
                                    ArrayRef<SourceRange> DynamicExceptionRanges,
                                    Expr *NoexceptExpr,
                                    SmallVectorImpl<QualType> &Exceptions,
-                                   FunctionProtoType::ExtProtoInfo &EPI);
+                                   FunctionProtoType::ExceptionSpecInfo &ESI);
 
   /// \brief Determine if a special member function should have a deleted
   /// definition when it is defaulted.

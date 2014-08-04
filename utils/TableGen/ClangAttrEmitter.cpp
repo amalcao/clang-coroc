@@ -206,6 +206,7 @@ namespace {
 
     virtual bool isEnumArg() const { return false; }
     virtual bool isVariadicEnumArg() const { return false; }
+    virtual bool isVariadic() const { return false; }
 
     virtual void writeImplicitCtorArgs(raw_ostream &OS) const {
       OS << getUpperName();
@@ -485,9 +486,10 @@ namespace {
     }
     void writeValue(raw_ostream &OS) const override {
       OS << "\";\n";
-      OS << "    assert(is" << getLowerName() << "Expr && " << getLowerName()
-         << "Expr != nullptr);\n";
-      OS << "    " << getLowerName() << "Expr->printPretty(OS, 0, Policy);\n";
+      // The aligned attribute argument expression is optional.
+      OS << "    if (is" << getLowerName() << "Expr && "
+         << getLowerName() << "Expr)\n";
+      OS << "      " << getLowerName() << "Expr->printPretty(OS, 0, Policy);\n";
       OS << "    OS << \"";
     }
     void writeDump(raw_ostream &OS) const override {
@@ -514,6 +516,7 @@ namespace {
           ArgSizeName(ArgName + "Size"), RangeName(getLowerName()) {}
 
     std::string getType() const { return Type; }
+    bool isVariadic() const override { return true; }
 
     void writeAccessors(raw_ostream &OS) const override {
       std::string IteratorType = getLowerName().str() + "_iterator";
@@ -1118,6 +1121,11 @@ writePrettyPrintFunction(Record &R,
       continue;
     }
 
+    // FIXME: always printing the parenthesis isn't the correct behavior for
+    // attributes which have optional arguments that were not provided. For
+    // instance: __attribute__((aligned)) will be pretty printed as
+    // __attribute__((aligned())). The logic should check whether there is only
+    // a single argument, and if it is optional, whether it has been provided.
     if (!Args.empty())
       OS << "(";
     if (Spelling == "availability") {
@@ -2033,16 +2041,26 @@ void EmitClangAttrParsedAttrList(RecordKeeper &Records, raw_ostream &OS) {
   }
 }
 
+static bool isArgVariadic(const Record &R, StringRef AttrName) {
+  return createArgument(R, AttrName)->isVariadic();
+}
+
 static void emitArgInfo(const Record &R, std::stringstream &OS) {
   // This function will count the number of arguments specified for the
   // attribute and emit the number of required arguments followed by the
   // number of optional arguments.
   std::vector<Record *> Args = R.getValueAsListOfDefs("Args");
   unsigned ArgCount = 0, OptCount = 0;
+  bool HasVariadic = false;
   for (const auto *Arg : Args) {
     Arg->getValueAsBit("Optional") ? ++OptCount : ++ArgCount;
+    if (!HasVariadic && isArgVariadic(*Arg, R.getName()))
+      HasVariadic = true;
   }
-  OS << ArgCount << ", " << OptCount;
+
+  // If there is a variadic argument, we will set the optional argument count
+  // to its largest value. Since it's currently a 4-bit number, we set it to 15.
+  OS << ArgCount << ", " << (HasVariadic ? 15 : OptCount);
 }
 
 static void GenerateDefaultAppertainsTo(raw_ostream &OS) {
