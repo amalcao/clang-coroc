@@ -549,6 +549,8 @@ void Driver::generateCompilationDiagnostics(Compilation &C,
         StringRef NewFilename = llvm::sys::path::filename(*it);
         I = StringRef(Cmd).rfind(OldFilename);
         E = I + OldFilename.size();
+        if (E + 1 < Cmd.size() && Cmd[E] == '"')
+          ++E;  // Replace a trailing quote if present.
         I = Cmd.rfind(" ", I) + 1;
         Cmd.replace(I, E - I, NewFilename.data(), NewFilename.size());
         if (!VFS.empty()) {
