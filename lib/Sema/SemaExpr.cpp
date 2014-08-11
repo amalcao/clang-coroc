@@ -13061,6 +13061,19 @@ ExprResult Sema::CheckBooleanCondition(Expr *E, SourceLocation Loc) {
 
     QualType T = E->getType();
     if (!T->isScalarType()) { // C99 6.8.4.1p1
+	  // check nonblock channel operantions in CoroC
+	  if (getLangOpts().CoroC && T == Context.VoidTy) {
+	    BinaryOperator *BO = dyn_cast<BinaryOperator>(E);
+		if (BO != nullptr) {
+		  unsigned Opc = BO->getOpcode();
+		  Expr *LHS = BO->getLHS();
+		  if ((Opc == BO_Shr || Opc == BO_Shl) && 
+		       LHS->getType() == Context.ChanRefTy) {
+		    E->setType(Context.BoolTy);
+			return E;
+		  }
+		}
+	  }
       Diag(Loc, diag::err_typecheck_statement_requires_scalar)
         << T << E->getSourceRange();
       return ExprError();

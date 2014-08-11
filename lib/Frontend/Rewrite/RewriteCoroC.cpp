@@ -436,9 +436,14 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
 
   if (LHS->getType() == Context->ChanRefTy) {
     // Insert the function call at the start of the first expr
-    Rewrite.InsertText(LHS->getLocStart(),
-      Opc == BO_Shl ? "__CoroC_Chan_Send(" : "__CoroC_Chan_Recv(", true);
-  
+    if (B->getType() == Context->VoidTy) {
+      Rewrite.InsertText(LHS->getLocStart(),
+        Opc == BO_Shl ? "__CoroC_Chan_Send(" : "__CoroC_Chan_Recv(", true);
+    } else {
+      Rewrite.InsertText(LHS->getLocStart(),
+        Opc == BO_Shl ? "__CoroC_Chan_Send_NB(" : "__CoroC_Chan_Recv_NB(", true);
+	}
+
     // Replace the operator "<<" or ">>" with ","
     Rewrite.ReplaceText(B->getOperatorLoc(),
                       B->getOpcodeStr().size(), ",");
