@@ -25,7 +25,7 @@
 #include "clang/Lex/Pragma.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/SaveAndRestore.h"
 using namespace clang;
 
@@ -1441,7 +1441,9 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
   SmallString<128> NormalizedPath;
   if (LangOpts.MSVCCompat) {
     NormalizedPath = Filename.str();
-    llvm::sys::fs::normalize_separators(NormalizedPath);
+#ifndef LLVM_ON_WIN32
+    llvm::sys::path::native(NormalizedPath);
+#endif
   }
   const FileEntry *File = LookupFile(
       FilenameLoc, LangOpts.MSVCCompat ? NormalizedPath.c_str() : Filename,

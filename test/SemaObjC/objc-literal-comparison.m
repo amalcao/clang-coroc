@@ -10,6 +10,8 @@
 
 typedef signed char BOOL;
 
+@protocol NSCopying @end
+
 @interface BaseObject
 + (instancetype)new;
 @end
@@ -27,10 +29,12 @@ typedef signed char BOOL;
 
 @interface NSArray : NSObject
 + (id)arrayWithObjects:(const id [])objects count:(unsigned long)cnt;
+- (id)initWithObjects:(const id [])objects count:(unsigned long)cnt;
 @end
 
 @interface NSDictionary : NSObject
 + (id)dictionaryWithObjects:(const id [])objects forKeys:(const id [])keys count:(unsigned long)cnt;
+- (instancetype)initWithObjects:(const id [])objects forKeys:(const id <NSCopying> [])keys count:(unsigned long)cnt;
 @end
 
 @interface NSString : NSObject

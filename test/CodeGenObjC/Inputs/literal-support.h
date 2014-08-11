@@ -30,10 +30,12 @@ typedef unsigned char BOOL;
 
 @interface NSArray (NSArrayCreation)
 + (id)arrayWithObjects:(const id [])objects count:(unsigned long)cnt;
+- (id)initWithObjects:(const id [])objects count:(unsigned long)cnt;
 @end
 
 @interface NSDictionary : NSObject
 + (id)dictionaryWithObjects:(const id [])objects forKeys:(const id [])keys count:(unsigned long)cnt;
+- (instancetype)initWithObjects:(const id [])objects forKeys:(const id [])keys count:(unsigned long)cnt; 
 @end
 
 #endif // OBJC_LITERAL_SUPPORT_H

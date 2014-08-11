@@ -1040,6 +1040,9 @@ static void getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   Features.push_back("-n64");
   Features.push_back(Args.MakeArgString(ABIFeature));
 
+  AddTargetFeature(Args, Features, options::OPT_mno_abicalls,
+                   options::OPT_mabicalls, "noabicalls");
+
   StringRef FloatABI = getMipsFloatABI(D, Args);
   if (FloatABI == "soft") {
     // FIXME: Note, this is a hack. We need to pass the selected float
@@ -2105,7 +2108,8 @@ static void addClangRTLinux(
 
 static void addProfileRT(
     const ToolChain &TC, const ArgList &Args, ArgStringList &CmdArgs) {
-  if (!(Args.hasArg(options::OPT_fprofile_arcs) ||
+  if (!(Args.hasFlag(options::OPT_fprofile_arcs, options::OPT_fno_profile_arcs,
+                     false) ||
         Args.hasArg(options::OPT_fprofile_generate) ||
         Args.hasArg(options::OPT_fprofile_instr_generate) ||
         Args.hasArg(options::OPT_fcreate_profile) ||
@@ -2269,13 +2273,13 @@ static void addDfsanRT(const ToolChain &TC, const ArgList &Args,
 static void addSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
                                  ArgStringList &CmdArgs) {
   const SanitizerArgs &Sanitize = TC.getSanitizerArgs();
-  const Driver &D = TC.getDriver();
   if (Sanitize.needsUbsanRt())
-    addUbsanRT(TC, Args, CmdArgs, D.CCCIsCXX(),
-                    Sanitize.needsAsanRt() || Sanitize.needsTsanRt() ||
-                    Sanitize.needsMsanRt() || Sanitize.needsLsanRt());
+    addUbsanRT(TC, Args, CmdArgs, Sanitize.linkCXXRuntimes(),
+               Sanitize.needsAsanRt() || Sanitize.needsTsanRt() ||
+                   Sanitize.needsMsanRt() || Sanitize.needsLsanRt());
   if (Sanitize.needsAsanRt())
-    addAsanRT(TC, Args, CmdArgs, Sanitize.needsSharedAsanRt(), D.CCCIsCXX());
+    addAsanRT(TC, Args, CmdArgs, Sanitize.needsSharedAsanRt(),
+              Sanitize.linkCXXRuntimes());
   if (Sanitize.needsTsanRt())
     addTsanRT(TC, Args, CmdArgs);
   if (Sanitize.needsMsanRt())
@@ -3232,7 +3236,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_ftest_coverage) ||
       Args.hasArg(options::OPT_coverage))
     CmdArgs.push_back("-femit-coverage-notes");
-  if (Args.hasArg(options::OPT_fprofile_arcs) ||
+  if (Args.hasFlag(options::OPT_fprofile_arcs, options::OPT_fno_profile_arcs,
+                   false) ||
       Args.hasArg(options::OPT_coverage))
     CmdArgs.push_back("-femit-coverage-data");
 
@@ -6966,6 +6971,7 @@ void netbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
   bool useLibgcc = true;
   if (Major >= 7 || (Major == 6 && Minor == 99 && Micro >= 49) || Major == 0) {
     switch(getToolChain().getArch()) {
+    case llvm::Triple::aarch64:
     case llvm::Triple::arm:
     case llvm::Triple::armeb:
     case llvm::Triple::thumb:
