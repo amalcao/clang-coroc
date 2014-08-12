@@ -2369,6 +2369,15 @@ DEF_TRAVERSE_STMT(CoroCMakeChanExpr, {
     TRY_TO(TraverseStmt(S->getCapExpr()));
     return true; })
 
+DEF_TRAVERSE_STMT(CoroCCaseStmt, {
+	TRY_TO(TraverseStmt(S->getChanOpExpr()));
+	TRY_TO(TraverseStmt(S->getBody()));
+	return true; })
+
+DEF_TRAVERSE_STMT(CoroCSelectStmt, {
+	TRY_TO(TraverseStmt(S->getBody()));
+	return true; })
+
 // OpenMP clauses.
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseOMPClause(OMPClause *C) {

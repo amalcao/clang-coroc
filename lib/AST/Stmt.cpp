@@ -1725,4 +1725,3 @@ OMPAtomicDirective *OMPAtomicDirective::CreateEmpty(const ASTContext &C,
       C.Allocate(Size + sizeof(OMPClause *) * NumClauses + sizeof(Stmt *));
   return new (Mem) OMPAtomicDirective(NumClauses);
 }
-

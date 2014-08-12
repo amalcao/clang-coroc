@@ -3120,6 +3120,11 @@ public:
                                     SourceLocation GTLoc,
                                     SourceRange TyRange,
                                     QualType T, Expr *E);
+
+  StmtResult ActOnCoroCCaseOrDefaultStmt(SourceLocation CaseLoc, 
+  										 Expr *E, Stmt *Body);
+
+  StmtResult ActOnCoroCSelectStmt(SourceLocation SelectLoc, Stmt* Body);
   // --
 
   VarDecl *getCopyElisionCandidate(QualType ReturnType, Expr *E,

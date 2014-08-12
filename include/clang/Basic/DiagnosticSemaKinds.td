@@ -7289,4 +7289,9 @@ def err_chan_not_init : Error<
 // __CoroC_Quit
 //  TODO
 
+// __CoroC_Select
+def err_case_op_not_chan_ops : Error<
+	"the expr of __CoroC_Case must be a channel operation">;
+def err_select_body_empty : Error<
+	"the body of __CoroC_Select cannot be empty">;
 } // end of sema component.

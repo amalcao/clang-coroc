@@ -78,22 +78,119 @@ namespace {
     }
   };
 
+  /// \brief Select Helper for generating the code for '__CoroC_Select'
+  class SelectHelper {
+	Rewriter &Rewrite;
+	std::string SelUID;
+	SourceLocation StartLoc, EndLoc;
+
+	unsigned CaseNum;
+	unsigned CurPos;
+
+    bool HasDefault;
+
+	std::stringstream Prologue, Epilogue;
+
+  public:
+    SelectHelper(Rewriter &R, std::string UID,
+				 SourceLocation SL, SourceLocation EL,
+				 unsigned Num, bool hasDef)
+	  : Rewrite(R), SelUID(UID), StartLoc(SL), EndLoc(EL)
+	  , CaseNum(Num), CurPos(0), HasDefault(hasDef) { }
+	
+	void DumpPrologueAndEpilogue() {
+	  Prologue << "\t\t__chan_t __select_result_"
+			   << SelUID << " = __CoroC_Select(__select_set_"
+			   << SelUID << ", " << !HasDefault << ");\n";
+
+	  Rewrite.InsertTextAfterToken(StartLoc, Prologue.str());
+	  Rewrite.InsertTextBefore(EndLoc, Epilogue.str());
+	}
+
+	void GenPrologueAndEpilogue() {
+	  int num = HasDefault ? CaseNum - 1 : CaseNum;
+	  Prologue << "\n\t\t__select_set_t __select_set_" << SelUID
+	  		   << " = __CoroC_Select_Alloc(" << num << ");\n"; 
+
+	  Epilogue << "\n\t\t__CoroC_Select_Dealloc(__select_set_"
+	  		   << SelUID << ");\n\t";
+	}
+	
+	void InsertCaseInitialization(BinaryOperator *BO) {
+	  bool send = BO->getOpcode() == BO_Shl;
+
+	  std::string funcName = "__CoroC_Select_"; 
+	  if (send)
+	    funcName += "Send";
+	  else
+	    funcName += "Recv";
+
+	  Prologue << "\t\t" << funcName << "(__select_set_"
+	  			  << SelUID << ", *("
+	  			  << Rewrite.ConvertToString(BO->getLHS()) << "), ";
+	  
+	  if (!send)
+	    Prologue << "&(" << Rewrite.ConvertToString(BO->getRHS()) <<")";
+	  else
+	    Prologue << Rewrite.ConvertToString(BO->getRHS());
+
+	  Prologue << ");\n";
+	}
+
+	bool RewriteCaseStmt(CoroCCaseStmt *Case) {
+	  std::stringstream SS;
+
+	  if (CurPos == 0)
+    	SS << "if ";
+	  else
+		SS << "else if ";
+
+	  Expr *E = Case->getChanOpExpr();
+	  if (E != nullptr) {
+	    ParenExpr *PE = dyn_cast<ParenExpr>(E);
+		assert(PE != nullptr);
+
+		BinaryOperator *BO = reinterpret_cast<BinaryOperator*>(PE->getSubExpr());
+		InsertCaseInitialization(BO);
+
+	    SS << "(*(" << Rewrite.ConvertToString(BO->getLHS()) << ") == "
+		   << "__select_result_" << SelUID << ")";
+
+	    Rewrite.ReplaceText(
+	  			SourceRange(Case->getLocStart(), PE->getLocEnd()),
+				SS.str() );
+      } else {
+	    SS << "(NULL == __select_result_" << SelUID << ")";
+
+	    Rewrite.ReplaceText(
+	  			SourceRange(Case->getLocStart()), SS.str());
+	  }
+
+	  return (++CurPos < CaseNum); 
+	}
+
+  };
+
   /// \brief Recursive visit everything in AST, and make the translation.
   class CoroCRecursiveASTVisitor 
       : public RecursiveASTVisitor<CoroCRecursiveASTVisitor> 
   {
     static long unique_id_generator;
 
-    bool hasMain;
-
     Rewriter &Rewrite;
     ASTContext *Context;
+    bool hasMain;
+
     std::vector<ThunkHelper*> ThunkPool; 
+	std::vector<SelectHelper*> SelStk;
 
     Token getNextTok(SourceLocation CurLoc);
     SourceLocation getNextTokLocStart(SourceLocation CurLoc);
     ThunkHelper *getOrCreateThunkHelper(CallExpr *C);
 	bool rewriteCoroCRefTy(Expr *E);
+	void pushSelStk(SelectHelper *Helper);
+	SelectHelper* popSelStk();
+
 
   public:
     CoroCRecursiveASTVisitor(Rewriter &R, ASTContext *C) 
@@ -110,7 +207,10 @@ namespace {
     bool VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E);
     bool VisitCoroCYieldStmt(CoroCYieldStmt *S);
     bool VisitCoroCQuitStmt(CoroCQuitStmt *S);
-    
+
+	bool VisitCoroCCaseStmt(CoroCCaseStmt *S);
+	bool VisitCoroCSelectStmt(CoroCSelectStmt *S);
+
 	bool VisitArraySubscriptExpr(ArraySubscriptExpr *E);
     bool VisitDeclRefExpr(DeclRefExpr *E);
     bool VisitMemberExpr(MemberExpr *E);
@@ -228,7 +328,7 @@ void ThunkHelper::dumpThunkFunc(std::ostream &OS) {
   Expr *E = TheCallExpr->getCallee();
 
   // Generate the func declaration:
-  OS << "\nint __thunk_helper_"
+  OS << "\nstatic int __thunk_helper_"
      << ThunkUID << "(";
 
   if (numArgs == 0)
@@ -345,6 +445,19 @@ ThunkHelper* CoroCRecursiveASTVisitor::getOrCreateThunkHelper(CallExpr *C) {
 
   ThunkPool.push_back(Thunk);
   return Thunk;
+}
+
+/// Push / Pop the SelectHelper Stack
+void CoroCRecursiveASTVisitor::pushSelStk(SelectHelper *Helper) {
+  SelStk.push_back(Helper);
+}
+
+SelectHelper* CoroCRecursiveASTVisitor::popSelStk() {
+  if (SelStk.empty())
+  	return nullptr;
+  SelectHelper *SH = SelStk.back();
+  SelStk.pop_back();
+  return SH;
 }
 
 /// Visit the FunctionDecl, change the `main' to `__CoroC_UserMain'
@@ -570,6 +683,48 @@ bool CoroCRecursiveASTVisitor::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
   return true;
 }
 
+/// Transform the __CoroC_Select keyword
+bool CoroCRecursiveASTVisitor::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
+  CompoundStmt *CS = reinterpret_cast<CompoundStmt*>(S->getBody());
+  bool hasDef = false;
+  CompoundStmt::body_iterator itr = CS->body_begin();
+  for (; itr != CS->body_end() && !hasDef; ++itr) {
+    CoroCCaseStmt *Case = reinterpret_cast<CoroCCaseStmt*>(*itr);
+	if (Case->getChanOpExpr() == nullptr) 
+	  hasDef = true;
+  }
+  
+  std::stringstream SS;
+  SS << unique_id_generator++;
+
+  SelectHelper *SH = new SelectHelper(Rewrite, SS.str(),
+  									  CS->getLocStart(), 
+									  CS->getLocEnd(),
+									  CS->size(), hasDef);
+  SH->GenPrologueAndEpilogue();
+  pushSelStk(SH);
+
+  Rewrite.RemoveText(SourceRange(S->getSelectLoc()));
+  return true;
+}
+
+/// Transform the __CoroC_Case / __CoroC_Default
+bool CoroCRecursiveASTVisitor::VisitCoroCCaseStmt(CoroCCaseStmt *S) {
+  SelectHelper *SH = popSelStk();
+  assert (SH != nullptr);
+  
+  if (SH->RewriteCaseStmt(S)) {
+    pushSelStk(SH);
+  } else {
+    SH->DumpPrologueAndEpilogue();
+    delete SH;
+  }
+
+  // FIXME : better way to stop traverse the ChanOpExpr
+  S->setChanOpExpr(nullptr);
+  return true;
+}
+
 
 RewriteCoroC::RewriteCoroC(const std::string &inFile, raw_ostream* OS,
                            DiagnosticsEngine &D, const LangOptions &LOpt) 
@@ -622,10 +777,11 @@ void RewriteCoroC::HandleTranslationUnit(ASTContext &C) {
   }
 }
 
-ASTConsumer *clang::CreateCoroCRewriter(const std::string &InFile,
+std::unique_ptr<ASTConsumer>
+clang::CreateCoroCRewriter(const std::string &InFile,
                                  raw_ostream *OS,
                                  DiagnosticsEngine &Diags,
                                  const LangOptions &LOpts) {
-  return new RewriteCoroC(InFile, OS, Diags, LOpts);
+  return llvm::make_unique<RewriteCoroC>(InFile, OS, Diags, LOpts);
 }
 

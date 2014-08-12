@@ -907,6 +907,8 @@ def err_seh___finally_block : Error<
 // CoroC support.
 def err_coro_disable : Error<
     "CoroC support disabled">;
+def err_select_more_default : Error<
+	"found more than one __CoroC_Default in a __CoroC_Select block">;
 
 def err_typecheck_coro_sclass : Error<
     "the '__chan_t' and '__task_t' cannot have any specifiers">;

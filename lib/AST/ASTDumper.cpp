@@ -359,6 +359,8 @@ namespace  {
     void VisitCoroCMakeChanExpr(const CoroCMakeChanExpr *Node);
     void VisitCoroCYieldStmt(const CoroCYieldStmt *Node);
     void VisitCoroCQuitStmt(const CoroCQuitStmt *Node);
+	void VisitCoroCCaseStmt(const CoroCCaseStmt *Node);
+	void VisitCoroCSelectStmt(const CoroCSelectStmt *Node);
 
     // Comments.
     const char *getCommandName(unsigned CommandID);
@@ -2037,6 +2039,19 @@ void ASTDumper::VisitCoroCQuitStmt(const CoroCQuitStmt *Node) {
     dumpStmt(Node->getReturnExpr());
 }
 
+void ASTDumper::VisitCoroCCaseStmt(const CoroCCaseStmt *Node) {
+  VisitStmt(Node);
+  if (Node->getChanOpExpr() != nullptr)
+    dumpStmt(Node->getChanOpExpr());
+  if (Node->getBody() != nullptr)
+    dumpStmt(Node->getBody());
+}
+
+void ASTDumper::VisitCoroCSelectStmt(const CoroCSelectStmt *Node) {
+  VisitStmt(Node);
+  if (Node->getBody() != nullptr)
+    dumpStmt(Node->getBody());
+}
 
 //===----------------------------------------------------------------------===//
 // Comments

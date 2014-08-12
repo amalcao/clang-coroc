@@ -2205,6 +2205,22 @@ void StmtPrinter::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
     OS << ";\n";
 }
 
+void StmtPrinter::VisitCoroCCaseStmt(CoroCCaseStmt *S) {
+	if (S->getChanOpExpr() == nullptr) {
+	  Indent() << "__CoroC_Case (";
+	  PrintExpr(S->getChanOpExpr());
+	  OS << ") ";
+	} else {
+	  Indent() << "__CoroC_Default ";
+	}
+	PrintStmt(S->getBody());
+}
+
+void StmtPrinter::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
+	Indent() << "__CoroC_Select ";
+	PrintStmt(S->getBody());
+}
+
 //===----------------------------------------------------------------------===//
 // Stmt method implementations
 //===----------------------------------------------------------------------===//

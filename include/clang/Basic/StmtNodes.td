@@ -51,6 +51,8 @@ def CXXForRangeStmt : Stmt;
 // CoroC statments
 def CoroCYieldStmt : Stmt;
 def CoroCQuitStmt : Stmt;
+def CoroCSelectStmt : Stmt;
+def CoroCCaseStmt : Stmt;
 
 
 // Expressions

@@ -942,6 +942,14 @@ void StmtProfiler::VisitCoroCQuitStmt(const CoroCQuitStmt *S) {
   VisitStmt(S);
 }
 
+void StmtProfiler::VisitCoroCCaseStmt(const CoroCCaseStmt *S) {
+  VisitStmt(S);
+}
+
+void StmtProfiler::VisitCoroCSelectStmt(const CoroCSelectStmt *S) {
+  VisitStmt(S);
+}
+
 // Coroc >>
 
 void StmtProfiler::VisitCXXNamedCastExpr(const CXXNamedCastExpr *S) {

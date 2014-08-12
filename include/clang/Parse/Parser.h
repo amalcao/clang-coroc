@@ -1613,6 +1613,9 @@ private:
                                  SourceLocation *TrailingElseLoc,
                                  ParsedAttributesWithRange &Attrs);
 
+  StmtResult ParseCoroCCaseOrDefaultStatement();
+  StmtResult ParseCoroCSelectStatement();
+
   /// \brief Describes the behavior that should be taken for an __if_exists
   /// block.
   enum IfExistsBehavior {

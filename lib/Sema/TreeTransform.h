@@ -10457,6 +10457,18 @@ TreeTransform<Derived>::TransformCoroCQuitStmt(CoroCQuitStmt *S) {
 }
 
 template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformCoroCCaseStmt(CoroCCaseStmt *S) {
+	return S;
+}
+
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformCoroCSelectStmt(CoroCSelectStmt *S) {
+	return S;
+}
+
+template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 #if 0

@@ -1638,6 +1638,18 @@ void ASTStmtWriter::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
     Code = serialization::STMT_COROC_QUIT;
 }
 
+void ASTStmtWriter::VisitCoroCCaseStmt(CoroCCaseStmt *S) {
+	VisitStmt(S);
+	Writer.AddSourceLocation(S->getCaseOrDefaultLoc(), Record);
+	Code = serialization::STMT_COROC_CASE;
+}
+
+void ASTStmtWriter::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
+	VisitStmt(S);
+	Writer.AddSourceLocation(S->getSelectLoc(), Record);
+	Code = serialization::STMT_COROC_SELECT;
+}
+
 
 //===----------------------------------------------------------------------===//
 // Microsoft Expressions and Statements.

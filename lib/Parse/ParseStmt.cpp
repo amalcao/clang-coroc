@@ -363,6 +363,7 @@ Retry:
     ProhibitAttributes(Attrs);
     return ParsePragmaLoopHint(Stmts, OnlyStatement, TrailingElseLoc, Attrs);
 
+  case tok::kw___CoroC_Select:
   case tok::kw___CoroC_Yield:
   case tok::kw___CoroC_Quit:
     if (!getLangOpts().CoroC) {
@@ -371,7 +372,10 @@ Retry:
         return StmtError();
     }
 
-    if (Kind == tok::kw___CoroC_Yield) {
+    if (Kind == tok::kw___CoroC_Select)
+	    return ParseCoroCSelectStatement();
+	
+	if (Kind == tok::kw___CoroC_Yield) {
         SemiError = "__CoroC_Yield";
         Res = Actions.ActOnCoroCYieldStmt(ConsumeToken());
     } else {
@@ -1837,6 +1841,86 @@ StmtResult Parser::ParseReturnStatement() {
     }
   }
   return Actions.ActOnReturnStmt(ReturnLoc, R.get(), getCurScope());
+}
+
+/// for CoroC select statements
+StmtResult Parser::ParseCoroCCaseOrDefaultStatement() {
+  ExprResult Expr;
+  StmtResult Body;
+  Token OldTok = Tok;
+  SourceLocation Loc = ConsumeToken();
+
+  if (OldTok.is(tok::kw___CoroC_Case)) {
+    ParenParseOption Option = SimpleExpr;
+    ParsedType CastTy;
+	SourceLocation RPLoc;
+
+    // parse the channel operand
+    Expr = ParseParenExpression(Option, false, false, CastTy, RPLoc);
+	if (Expr.isInvalid()) {
+	  SkipUntil(tok::r_brace);
+	  return StmtError();
+	}
+  } else if (OldTok.isNot(tok::kw___CoroC_Default)) {
+    llvm_unreachable("CoroC Select case/default");
+  }
+  // parse the body
+  unsigned ScopeFlags = Scope::DeclScope;
+  Body = ParseCompoundStatement(ScopeFlags, false);
+  if (Body.isInvalid()) 
+    return StmtError();
+  
+  return Actions.ActOnCoroCCaseOrDefaultStmt(Loc, Expr.get(), Body.get());
+}
+
+
+StmtResult Parser::ParseCoroCSelectStatement() {
+  assert(Tok.is(tok::kw___CoroC_Select) && "Not a select stmt!");
+  SourceLocation Loc = ConsumeToken(); // eat '__CoroC_Select'
+
+  // parse the body
+  if (Tok.isNot(tok::l_brace)) {
+	SkipUntil(tok::semi);
+    return StmtError();
+  }
+
+  BalancedDelimiterTracker T(*this, tok::l_brace);
+  if (T.consumeOpen())
+	return StmtError();
+
+  StmtVector Stmts;
+
+  // try to parse the case / default list ..
+  bool hasDefault = false;
+  while (Tok.is(tok::kw___CoroC_Case) || Tok.is(tok::kw___CoroC_Default)) {
+	if (Tok.is(tok::kw___CoroC_Default)) {
+	  if (hasDefault) {
+	    // TODO : report more default error !!
+		Diag(Tok, diag::err_select_more_default);
+	    return StmtError();
+	  } else
+	    hasDefault = true;
+	} 
+
+    StmtResult CaseStmt = ParseCoroCCaseOrDefaultStatement();
+    if (CaseStmt.isInvalid()) 
+	  return StmtError();
+
+	Stmts.push_back(CaseStmt.get());
+  }
+
+  if (T.consumeClose()) {
+    // TODO : report error message
+	return StmtError();
+  }
+
+  StmtResult Body = Actions.ActOnCompoundStmt(T.getOpenLocation(), 
+  											  T.getCloseLocation(),
+											  Stmts, false);
+  if (Body.isInvalid())
+  	return StmtError();
+
+  return Actions.ActOnCoroCSelectStmt(Loc, Body.get());
 }
 
 StmtResult Parser::ParsePragmaLoopHint(StmtVector &Stmts, bool OnlyStatement,

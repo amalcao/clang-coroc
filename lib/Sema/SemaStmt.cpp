@@ -2423,6 +2423,30 @@ Sema::ActOnCoroCQuitStmt(SourceLocation QuitLoc, Expr *E) {
     return new (Context) CoroCQuitStmt(QuitLoc, E);
 }
 
+StmtResult
+Sema::ActOnCoroCCaseOrDefaultStmt(SourceLocation CaseLoc, Expr *E, Stmt *Body) {
+  if (E != nullptr) {
+    ParenExpr *P = dyn_cast<ParenExpr>(E);
+    assert (P != nullptr);
+
+    BinaryOperator *BinOp = dyn_cast<BinaryOperator>(P->getSubExpr());
+    if (BinOp == nullptr || BinOp->getLHS()->getType() != Context.ChanRefTy) 
+      return StmtError(Diag(CaseLoc, diag::err_case_op_not_chan_ops));
+  }
+
+  return new (Context) CoroCCaseStmt(E, Body, CaseLoc);
+}
+
+StmtResult
+Sema::ActOnCoroCSelectStmt(SourceLocation SelectLoc, Stmt *Body) {
+  CompoundStmt *CS = dyn_cast<CompoundStmt>(Body);
+  if (CS == nullptr || CS->size() == 0) {
+    // TODO :
+	return StmtError(Diag(Body->getLocStart(), diag::err_select_body_empty));
+  }
+  return new (Context) CoroCSelectStmt(Body, SelectLoc);
+}
+
 /// \brief Determine whether the given expression is a candidate for
 /// copy elision in either a return statement or a throw expression.
 ///

@@ -38,7 +38,8 @@ CreateModernObjCRewriter(const std::string &InFile, raw_ostream *OS,
                          bool SilenceRewriteMacroWarning, bool LineInfo);
 
 // CoroC rewriter: translate the CoroC source to pure C code.
-ASTConsumer *CreateCoroCRewriter(const std::string &InFile,
+std::unique_ptr<ASTConsumer>
+CreateCoroCRewriter(const std::string &InFile,
                                  raw_ostream *OS,
                                  DiagnosticsEngine &Diags,
                                  const LangOptions &LOpts);

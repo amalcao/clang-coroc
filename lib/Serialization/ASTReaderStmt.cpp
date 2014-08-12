@@ -1679,6 +1679,14 @@ void ASTStmtReader::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
     llvm_unreachable("not implemented yet");
 }
 
+void ASTStmtReader::VisitCoroCCaseStmt(CoroCCaseStmt *S) {
+	llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
+	llvm_unreachable("not implemented yet");
+}
+
 //===----------------------------------------------------------------------===//
 // OpenMP Clauses.
 //===----------------------------------------------------------------------===//
@@ -2884,6 +2892,14 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     case STMT_COROC_QUIT:
         S = new (Context) CoroCQuitStmt(Empty);
         break;
+
+	case STMT_COROC_CASE:
+		S = new (Context) CoroCCaseStmt(Empty);
+		break;
+
+	case STMT_COROC_SELECT:
+		S = new (Context) CoroCSelectStmt(Empty);
+		break;
 
     case EXPR_COROC_SPAWN:
     case EXPR_COROC_CHAN:

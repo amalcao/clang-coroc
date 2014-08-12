@@ -2278,6 +2278,13 @@ DEF_TRAVERSE_STMT(CoroCMakeChanExpr, {
 DEF_TRAVERSE_STMT(CoroCYieldStmt, {})
 DEF_TRAVERSE_STMT(CoroCQuitStmt, {})
 
+DEF_TRAVERSE_STMT(CoroCCaseStmt, { 
+	if (S->getChanOpExpr() != nullptr) { TRY_TO(TraverseStmt(S->getChanOpExpr()));}
+	TRY_TO(TraverseStmt(S->getBody())); })
+
+DEF_TRAVERSE_STMT(CoroCSelectStmt, {
+	TRY_TO(TraverseStmt(S->getBody())); })
+
 // OpenMP directives.
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseOMPExecutableDirective(

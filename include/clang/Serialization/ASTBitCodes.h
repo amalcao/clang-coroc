@@ -1364,6 +1364,8 @@ namespace clang {
       // CoroC
       STMT_COROC_YIELD,
       STMT_COROC_QUIT,
+	  STMT_COROC_CASE,
+	  STMT_COROC_SELECT,
       EXPR_COROC_SPAWN,
       EXPR_COROC_CHAN,
     };
