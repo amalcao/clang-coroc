@@ -188,6 +188,7 @@ namespace {
     SourceLocation getNextTokLocStart(SourceLocation CurLoc);
     ThunkHelper *getOrCreateThunkHelper(CallExpr *C);
 	bool rewriteCoroCRefTy(Expr *E);
+	void rewriteCoroCRefTypeName(SourceLocation, bool);
 	void pushSelStk(SelectHelper *Helper);
 	SelectHelper* popSelStk();
 
@@ -469,8 +470,38 @@ bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
       hasMain = true;
     }
   }
+  
+  bool isPointer = false;
+  QualType Ty = D->getReturnType();
+  if (Ty->isPointerType()) {
+    isPointer = true;
+	Ty = Ty.getTypePtr()->getPointeeType();
+  }
+
+  if (Ty == Context->ChanRefTy || Ty == Context->TaskRefTy) {
+    SourceLocation StartLoc = D->getReturnTypeSourceRange().getBegin();
+    rewriteCoroCRefTypeName(StartLoc, !isPointer);
+  }
 
   return true;
+}
+
+/// Rewrite the type name of __chan_t / __task_t, delete the attribute or add a wrapper
+void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc, bool addWrapper) {
+    // Check if the `__chan_t' with a type attribute
+    Token TheTok = getNextTok(StartLoc);
+    if (TheTok.getKind() == tok::less) {
+      while (TheTok.getKind() != tok::greater) {
+        SourceLocation Loc = TheTok.getLocation();
+        TheTok = getNextTok(Loc);
+        Rewrite.ReplaceText(Loc, "");
+      }
+      Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
+    }
+    if (addWrapper) {
+      Rewrite.InsertText(StartLoc, "__CXX_refcnt_t<");
+      Rewrite.InsertTextAfterToken(StartLoc, " >");
+	}
 }
 
 /// Override the ValueDecl when the type is CoroC Ref
@@ -488,7 +519,7 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   if (Ty == Context->TaskRefTy ||
       Ty == Context->ChanRefTy) {
     SourceLocation StartLoc = D->getSourceRange().getBegin();
-
+#if 0
     // Check if the `__chan_t' with a type attribute
     Token TheTok = getNextTok(StartLoc);
     if (TheTok.getKind() == tok::less) {
@@ -503,6 +534,9 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
       Rewrite.InsertText(StartLoc, "__CXX_refcnt_t<");
       Rewrite.InsertTextAfterToken(StartLoc, " >");
 	}
+#else
+	rewriteCoroCRefTypeName(StartLoc, !isPointer);
+#endif
   }
   return true;
 }
