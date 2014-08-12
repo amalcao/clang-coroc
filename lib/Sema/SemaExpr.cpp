@@ -7516,7 +7516,10 @@ namespace {
 	  QualType Ty = E->getType();
 	  if (Ty->isArrayType()) {
 	    Ty = Ctx->getBaseElementType(Ty);
+	  } else if (Ty->isPointerType()) {
+	    Ty = Ty.getTypePtr()->getPointeeType();
 	  }
+
 	  return (Ty == Ctx->ChanRefTy);
 	}
 

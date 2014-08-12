@@ -473,17 +473,17 @@ bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
   return true;
 }
 
-#if 0
-/// Override the VarDecl when the var is a CoroC refcnt type
-bool CoroCRecursiveASTVisitor::VisitVarDecl(VarDecl *D) {
-#else
 /// Override the ValueDecl when the type is CoroC Ref
 bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
-#endif
   // Determine the type of the var
+  bool isPointer = false;
   QualType Ty = D->getType();
   if (Ty->isArrayType())
     Ty = Context->getBaseElementType(Ty);
+  else if (Ty->isPointerType()) {
+  	Ty = Ty.getTypePtr()->getPointeeType();
+	isPointer = true;
+  }
 
   if (Ty == Context->TaskRefTy ||
       Ty == Context->ChanRefTy) {
@@ -499,9 +499,10 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
       }
       Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
     }
-
-    Rewrite.InsertText(StartLoc, "__CXX_refcnt_t<");
-    Rewrite.InsertTextAfterToken(StartLoc, " >");
+    if (!isPointer) {
+      Rewrite.InsertText(StartLoc, "__CXX_refcnt_t<");
+      Rewrite.InsertTextAfterToken(StartLoc, " >");
+	}
   }
   return true;
 }

@@ -13673,6 +13673,8 @@ AvailabilityResult Sema::getCurContextAvailability() const {
 void Sema::CheckChanDecl(ValueDecl *D, QualType Ty, const DeclSpec &DS) {
   if (Ty->isArrayType())
     Ty = Context.getBaseElementType(Ty);
+  else if (Ty->isPointerType())
+    Ty = Ty.getTypePtr()->getPointeeType();
 
   if (!getLangOpts().CoroC || Ty != Context.ChanRefTy)
     return;
