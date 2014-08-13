@@ -13692,10 +13692,14 @@ AvailabilityResult Sema::getCurContextAvailability() const {
 
 /// \brief Check if the current ValueDecl is CoroC channel decl
 void Sema::CheckChanDecl(ValueDecl *D, QualType Ty, const DeclSpec &DS) {
+  Ty = Ty.getCanonicalType(); // get the underlying type 
+
   if (Ty->isArrayType())
     Ty = Context.getBaseElementType(Ty);
   else if (Ty->isPointerType())
-    Ty = Ty.getTypePtr()->getPointeeType();
+    Ty = Ty->getPointeeType();
+
+  Ty = Ty.getCanonicalType();
 
   if (!getLangOpts().CoroC || Ty != Context.ChanRefTy)
     return;

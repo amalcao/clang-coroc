@@ -852,7 +852,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
 
   // CoroC definition
   if (LangOpts.CoroC) {
-    Builder.defineMacro("__coro_c", "1.0");
+    Builder.defineMacro("__COROC__", "1.0");
   }
 
   // OpenMP definition

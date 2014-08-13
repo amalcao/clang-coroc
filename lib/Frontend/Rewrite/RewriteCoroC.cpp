@@ -38,6 +38,7 @@ using namespace clang;
 using llvm::utostr;
 
 namespace {
+
   /// \brief Thunk helper function for Spawn Operator
   class ThunkHelper {
     ASTContext *Context;
@@ -88,6 +89,7 @@ namespace {
 	unsigned CurPos;
 
     bool HasDefault;
+    bool SimpleWay;
 
 	std::stringstream Prologue, Epilogue;
 
@@ -96,18 +98,25 @@ namespace {
 				 SourceLocation SL, SourceLocation EL,
 				 unsigned Num, bool hasDef)
 	  : Rewrite(R), SelUID(UID), StartLoc(SL), EndLoc(EL)
-	  , CaseNum(Num), CurPos(0), HasDefault(hasDef) { }
+	  , CaseNum(Num), CurPos(0), HasDefault(hasDef), SimpleWay(false) {
+        if (CaseNum == 2 && HasDefault)
+          SimpleWay = true;
+      }
 	
 	void DumpPrologueAndEpilogue() {
-	  Prologue << "\t\t__chan_t __select_result_"
-			   << SelUID << " = __CoroC_Select(__select_set_"
-			   << SelUID << ", " << !HasDefault << ");\n";
+      if (!SimpleWay) {
+	    Prologue << "\t\t__chan_t __select_result_"
+			     << SelUID << " = __CoroC_Select(__select_set_"
+			     << SelUID << ", " << !HasDefault << ");\n";
+      }
 
 	  Rewrite.InsertTextAfterToken(StartLoc, Prologue.str());
 	  Rewrite.InsertTextBefore(EndLoc, Epilogue.str());
 	}
 
 	void GenPrologueAndEpilogue() {
+      if (SimpleWay) return;
+
 	  int num = HasDefault ? CaseNum - 1 : CaseNum;
 	  Prologue << "\n\t\t__select_set_t __select_set_" << SelUID
 	  		   << " = __CoroC_Select_Alloc(" << num << ");\n"; 
@@ -118,16 +127,23 @@ namespace {
 	
 	void InsertCaseInitialization(BinaryOperator *BO) {
 	  bool send = BO->getOpcode() == BO_Shl;
+      std::string funcName;
 
-	  std::string funcName = "__CoroC_Select_"; 
-	  if (send)
-	    funcName += "Send";
-	  else
-	    funcName += "Recv";
+      if (SimpleWay) {
+        funcName = (send ? "__CoroC_Chan_Send_NB" 
+                         : "__CoroC_Chan_Recv_NB");
+        
+        Prologue << "\n\t\tbool __select_result_" << SelUID
+                 << " = " << funcName << "(";
+      } else {
+	    funcName = "__CoroC_Select_"; 
+	    funcName += (send ? "Send" : "Recv");
 
-	  Prologue << "\t\t" << funcName << "(__select_set_"
-	  			  << SelUID << ", *("
-	  			  << Rewrite.ConvertToString(BO->getLHS()) << "), ";
+	    Prologue << "\t\t" << funcName << "(__select_set_"
+	  			 << SelUID << ", ";
+      }
+	  
+      Prologue << "*(" << Rewrite.ConvertToString(BO->getLHS()) << "), ";
 	  
 	  if (!send)
 	    Prologue << "&(" << Rewrite.ConvertToString(BO->getRHS()) <<")";
@@ -141,30 +157,31 @@ namespace {
 	  std::stringstream SS;
 
 	  if (CurPos == 0)
-    	SS << "if ";
+    	SS << "if (";
 	  else
-		SS << "else if ";
+		SS << "else if (";
+
+      SourceRange SR(Case->getLocStart());
 
 	  Expr *E = Case->getChanOpExpr();
 	  if (E != nullptr) {
 	    ParenExpr *PE = dyn_cast<ParenExpr>(E);
 		assert(PE != nullptr);
+        SR.setEnd(PE->getLocEnd());
 
 		BinaryOperator *BO = reinterpret_cast<BinaryOperator*>(PE->getSubExpr());
 		InsertCaseInitialization(BO);
 
-	    SS << "(*(" << Rewrite.ConvertToString(BO->getLHS()) << ") == "
-		   << "__select_result_" << SelUID << ")";
+        if (!SimpleWay)
+	      SS << "*(" << Rewrite.ConvertToString(BO->getLHS()) << ") == ";
+		     
+        SS << "__select_result_" << SelUID << ")";
 
-	    Rewrite.ReplaceText(
-	  			SourceRange(Case->getLocStart(), PE->getLocEnd()),
-				SS.str() );
       } else {
-	    SS << "(NULL == __select_result_" << SelUID << ")";
-
-	    Rewrite.ReplaceText(
-	  			SourceRange(Case->getLocStart()), SS.str());
+	    SS << "!__select_result_" << SelUID << ")";
 	  }
+
+	  Rewrite.ReplaceText(SR, SS.str());
 
 	  return (++CurPos < CaseNum); 
 	}
@@ -188,7 +205,7 @@ namespace {
     SourceLocation getNextTokLocStart(SourceLocation CurLoc);
     ThunkHelper *getOrCreateThunkHelper(CallExpr *C);
 	bool rewriteCoroCRefTy(Expr *E);
-	void rewriteCoroCRefTypeName(SourceLocation, bool);
+	void rewriteCoroCRefTypeName(SourceLocation, QualType, bool);
 	void pushSelStk(SelectHelper *Helper);
 	SelectHelper* popSelStk();
 
@@ -478,30 +495,35 @@ bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
 	Ty = Ty.getTypePtr()->getPointeeType();
   }
 
-  if (Ty == Context->ChanRefTy || Ty == Context->TaskRefTy) {
-    SourceLocation StartLoc = D->getReturnTypeSourceRange().getBegin();
-    rewriteCoroCRefTypeName(StartLoc, !isPointer);
-  }
+  SourceLocation StartLoc = D->getReturnTypeSourceRange().getBegin();
+  rewriteCoroCRefTypeName(StartLoc, Ty, !isPointer);
 
   return true;
 }
 
 /// Rewrite the type name of __chan_t / __task_t, delete the attribute or add a wrapper
-void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc, bool addWrapper) {
-    // Check if the `__chan_t' with a type attribute
-    Token TheTok = getNextTok(StartLoc);
-    if (TheTok.getKind() == tok::less) {
-      while (TheTok.getKind() != tok::greater) {
-        SourceLocation Loc = TheTok.getLocation();
-        TheTok = getNextTok(Loc);
-        Rewrite.ReplaceText(Loc, "");
-      }
-      Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
+void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc, QualType Ty, bool addWrapper) {
+  Ty = Ty.getCanonicalType();
+  if (Ty != Context->ChanRefTy && Ty != Context->TaskRefTy) 
+    return;
+
+  // Check if the `__chan_t' with a type attribute
+  Token TheTok = getNextTok(StartLoc);
+  if (TheTok.getKind() == tok::less) {
+    while (TheTok.getKind() != tok::greater) {
+      SourceLocation Loc = TheTok.getLocation();
+      TheTok = getNextTok(Loc);
+      Rewrite.ReplaceText(Loc, "");
     }
-    if (addWrapper) {
-      Rewrite.InsertText(StartLoc, "__CXX_refcnt_t<");
-      Rewrite.InsertTextAfterToken(StartLoc, " >");
-	}
+    Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
+  }
+  if (addWrapper) {
+    StartLoc = Rewrite.getSourceMgr().getExpansionLoc(StartLoc);
+    if (Ty == Context->ChanRefTy) 
+      Rewrite.ReplaceText(StartLoc, "__CXX_refcnt_t<__chan_t >");
+    else
+      Rewrite.ReplaceText(StartLoc, "__CXX_refcnt_t<__task_t >");
+  }
 }
 
 /// Override the ValueDecl when the type is CoroC Ref
@@ -516,28 +538,9 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
 	isPointer = true;
   }
 
-  if (Ty == Context->TaskRefTy ||
-      Ty == Context->ChanRefTy) {
-    SourceLocation StartLoc = D->getSourceRange().getBegin();
-#if 0
-    // Check if the `__chan_t' with a type attribute
-    Token TheTok = getNextTok(StartLoc);
-    if (TheTok.getKind() == tok::less) {
-      while (TheTok.getKind() != tok::greater) {
-        SourceLocation Loc = TheTok.getLocation();
-        TheTok = getNextTok(Loc);
-        Rewrite.ReplaceText(Loc, "");
-      }
-      Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
-    }
-    if (!isPointer) {
-      Rewrite.InsertText(StartLoc, "__CXX_refcnt_t<");
-      Rewrite.InsertTextAfterToken(StartLoc, " >");
-	}
-#else
-	rewriteCoroCRefTypeName(StartLoc, !isPointer);
-#endif
-  }
+  SourceLocation StartLoc = D->getSourceRange().getBegin();
+  rewriteCoroCRefTypeName(StartLoc, Ty, !isPointer);
+  
   return true;
 }
 

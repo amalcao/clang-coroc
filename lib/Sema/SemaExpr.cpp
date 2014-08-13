@@ -7513,14 +7513,14 @@ namespace {
 	ASTContext *Ctx;
 
 	bool isChanRefTy(Expr *E) {
-	  QualType Ty = E->getType();
+	  QualType Ty = E->getType().getCanonicalType();
 	  if (Ty->isArrayType()) {
 	    Ty = Ctx->getBaseElementType(Ty);
 	  } else if (Ty->isPointerType()) {
 	    Ty = Ty.getTypePtr()->getPointeeType();
 	  }
 
-	  return (Ty == Ctx->ChanRefTy);
+	  return (Ty.getCanonicalType() == Ctx->ChanRefTy);
 	}
 
   public:
@@ -7549,9 +7549,11 @@ namespace {
 // CoroC Channel Send/Recv
 QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
                                  SourceLocation Loc, unsigned Opc) {
+    // Get the underlying type  
+    QualType LHSTy = LHS.get()->getType().getCanonicalType();
+
     // Check if the operand is CoroC channel send / recv
-    if (LangOpts.CoroC && 
-        LHS.get()->getType() == Context.ChanRefTy) {
+    if (LangOpts.CoroC && LHSTy == Context.ChanRefTy) {
       // Find the DeclRefExpr nodes in LHS
 	  ChanDeclCollector Visitor(&Context);
 	  Visitor.TraverseStmt(LHS.get());
@@ -7612,7 +7614,7 @@ QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
     return CheckVectorOperands(LHS, RHS, Loc, IsCompAssign);
 
   // Check the CoroC Chan operands
-  if (LHS.get()->getType() == Context.ChanRefTy)
+  if (LHS.get()->getType().getCanonicalType() == Context.ChanRefTy)
     return CheckChanOperands(LHS, RHS, Loc, Opc);
 
   // Shifts don't perform usual arithmetic conversions, they just do integer
