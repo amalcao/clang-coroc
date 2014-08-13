@@ -1134,18 +1134,28 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
 
   // Module map file
   if (WritingModule) {
-    BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
-    Abbrev->Add(BitCodeAbbrevOp(MODULE_MAP_FILE));
-    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // Filename
-    unsigned AbbrevCode = Stream.EmitAbbrev(Abbrev);
+    Record.clear();
+    auto addModMap = [&](const FileEntry *F) {
+      SmallString<128> ModuleMap(F->getName());
+      llvm::sys::fs::make_absolute(ModuleMap);
+      AddString(ModuleMap.str(), Record);
+    };
 
-    const FileEntry *ModMapFile = PP.getHeaderSearchInfo().getModuleMap().
-        getModuleMapFileForUniquing(WritingModule);
-    SmallString<128> ModuleMap(ModMapFile->getName());
-    llvm::sys::fs::make_absolute(ModuleMap);
-    RecordData Record;
-    Record.push_back(MODULE_MAP_FILE);
-    Stream.EmitRecordWithBlob(AbbrevCode, Record, ModuleMap.str());
+    auto &Map = PP.getHeaderSearchInfo().getModuleMap();
+
+    // Primary module map file.
+    addModMap(Map.getModuleMapFileForUniquing(WritingModule));
+
+    // Additional module map files.
+    if (auto *AdditionalModMaps = Map.getAdditionalModuleMapFiles(WritingModule)) {
+      Record.push_back(AdditionalModMaps->size());
+      for (const FileEntry *F : *AdditionalModMaps)
+        addModMap(F);
+    } else {
+      Record.push_back(0);
+    }
+
+    Stream.EmitRecord(MODULE_MAP_FILE, Record);
   }
 
   // Imports
@@ -3829,6 +3839,8 @@ void ASTWriter::WriteRedeclarations() {
           FirstFromAST = Prev;
       }
 
+      // FIXME: Do we need to do this for the first declaration from each
+      // redeclaration chain that was merged into this one?
       Chain->MergedDecls[FirstFromAST].push_back(getDeclID(First));
     }
 

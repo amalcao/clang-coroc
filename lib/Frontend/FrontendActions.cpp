@@ -55,6 +55,7 @@ ASTPrintAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
 std::unique_ptr<ASTConsumer>
 ASTDumpAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   return CreateASTDumper(CI.getFrontendOpts().ASTDumpFilter,
+                         CI.getFrontendOpts().ASTDumpDecls,
                          CI.getFrontendOpts().ASTDumpLookups);
 }
 
@@ -686,7 +687,8 @@ void PrintPreambleAction::ExecuteAction() {
   llvm::MemoryBuffer *Buffer
       = CI.getFileManager().getBufferForFile(getCurrentFile());
   if (Buffer) {
-    unsigned Preamble = Lexer::ComputePreamble(Buffer, CI.getLangOpts()).first;
+    unsigned Preamble =
+        Lexer::ComputePreamble(Buffer->getBuffer(), CI.getLangOpts()).first;
     llvm::outs().write(Buffer->getBufferStart(), Preamble);
     delete Buffer;
   }
