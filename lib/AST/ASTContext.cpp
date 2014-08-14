@@ -7525,6 +7525,18 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
   // Read the base type.
   switch (*Str++) {
   default: llvm_unreachable("Unknown builtin type letter!");
+  // for CoroC built types
+  case 't':
+    assert(HowLong == 0 && !Signed && !Unsigned &&
+           "Bad modifiers used with 't'!");
+    Type = Context.TaskRefTy;
+    break;
+  case 'r':
+    assert(HowLong == 0 && !Signed && !Unsigned &&
+           "Bad modifiers used with 'r'!");
+    Type = Context.ChanRefTy;
+    break;
+
   case 'v':
     assert(HowLong == 0 && !Signed && !Unsigned &&
            "Bad modifiers used with 'v'!");
