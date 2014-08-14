@@ -99,7 +99,8 @@ namespace {
 				 unsigned Num, bool hasDef)
 	  : Rewrite(R), SelUID(UID), StartLoc(SL), EndLoc(EL)
 	  , CaseNum(Num), CurPos(0), HasDefault(hasDef), SimpleWay(false) {
-        if (CaseNum == 2 && HasDefault)
+        if (CaseNum == 1 || 
+		    (CaseNum == 2 && HasDefault))
           SimpleWay = true;
       }
 	
@@ -587,13 +588,8 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
 
   if (LHS->getType() == Context->ChanRefTy) {
     // Insert the function call at the start of the first expr
-    if (B->getType() == Context->VoidTy) {
-      Rewrite.InsertText(LHS->getLocStart(),
-        Opc == BO_Shl ? "__CoroC_Chan_Send(" : "__CoroC_Chan_Recv(", true);
-    } else {
-      Rewrite.InsertText(LHS->getLocStart(),
-        Opc == BO_Shl ? "__CoroC_Chan_Send_NB(" : "__CoroC_Chan_Recv_NB(", true);
-	}
+    Rewrite.InsertText(LHS->getLocStart(),
+      Opc == BO_Shl ? "__CoroC_Chan_Send(" : "__CoroC_Chan_Recv(", true);
 
     // Replace the operator "<<" or ">>" with ","
     Rewrite.ReplaceText(B->getOperatorLoc(),

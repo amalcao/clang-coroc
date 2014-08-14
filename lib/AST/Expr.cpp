@@ -2040,7 +2040,7 @@ bool Expr::isUnusedResultAWarning(const Expr *&WarnE, SourceLocation &Loc,
      // Check if the CoroC channel send / recv operation
      case BO_Shl:
      case BO_Shr:
-        if (BO->getType() == Ctx.VoidTy)
+        if (!BO->getLHS()->getType()->isIntegralType(Ctx))
           return false;
         break;
     }

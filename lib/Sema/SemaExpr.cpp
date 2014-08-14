@@ -7591,7 +7591,7 @@ QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
       // FIXME: Check if the RHS is NOT a pure right-value when it is a ">>" operand 
       if (Opc == BO_Shl || 
           RHS.get()->isModifiableLvalue(Context, &Loc) == Expr::MLV_Valid)
-        return Context.VoidTy;
+        return Context.BoolTy;
       
       Diag(Loc, diag::err_chan_not_lvalue)
            << RHS.get()->getSourceRange();
@@ -13066,6 +13066,7 @@ ExprResult Sema::CheckBooleanCondition(Expr *E, SourceLocation Loc) {
 
     QualType T = E->getType();
     if (!T->isScalarType()) { // C99 6.8.4.1p1
+#if 0
 	  // check nonblock channel operantions in CoroC
 	  if (getLangOpts().CoroC && T == Context.VoidTy) {
 	    BinaryOperator *BO = dyn_cast<BinaryOperator>(E);
@@ -13079,6 +13080,7 @@ ExprResult Sema::CheckBooleanCondition(Expr *E, SourceLocation Loc) {
 		  }
 		}
 	  }
+#endif
       Diag(Loc, diag::err_typecheck_statement_requires_scalar)
         << T << E->getSourceRange();
       return ExprError();

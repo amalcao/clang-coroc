@@ -1914,12 +1914,17 @@ StmtResult Parser::ParseCoroCSelectStatement() {
 	return StmtError();
   }
 
+  if (hasDefault && Stmts.size() == 1) {
+    Diag(Loc, diag::err_select_no_case);
+	return StmtError();
+  }
+
   StmtResult Body = Actions.ActOnCompoundStmt(T.getOpenLocation(), 
   											  T.getCloseLocation(),
 											  Stmts, false);
   if (Body.isInvalid())
   	return StmtError();
-
+  
   return Actions.ActOnCoroCSelectStmt(Loc, Body.get());
 }
 
