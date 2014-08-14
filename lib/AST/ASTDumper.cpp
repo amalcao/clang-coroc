@@ -834,7 +834,7 @@ void ASTDumper::dumpDecl(const Decl *D) {
     OS << " implicit";
   if (D->isUsed())
     OS << " used";
-  else if (D->isReferenced())
+  else if (D->isThisDeclarationReferenced())
     OS << " referenced";
   if (D->isInvalidDecl())
     OS << " invalid";

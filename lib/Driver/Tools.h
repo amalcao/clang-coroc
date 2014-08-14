@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef CLANG_LIB_DRIVER_TOOLS_H_
-#define CLANG_LIB_DRIVER_TOOLS_H_
+#ifndef LLVM_CLANG_LIB_DRIVER_TOOLS_H
+#define LLVM_CLANG_LIB_DRIVER_TOOLS_H
 
 #include "clang/Driver/Tool.h"
 #include "clang/Driver/Types.h"
@@ -223,6 +223,7 @@ namespace mips {
                         const llvm::Triple &Triple, StringRef &CPUName,
                         StringRef &ABIName);
   bool hasMipsAbiArg(const llvm::opt::ArgList &Args, const char *Value);
+  bool isUCLibc(const llvm::opt::ArgList &Args);
   bool isNaN2008(const llvm::opt::ArgList &Args, const llvm::Triple &Triple);
   bool isFPXXDefault(const llvm::Triple &Triple, StringRef CPUName,
                      StringRef ABIName);
@@ -657,4 +658,4 @@ namespace XCore {
 } // end namespace driver
 } // end namespace clang
 
-#endif // CLANG_LIB_DRIVER_TOOLS_H_
+#endif

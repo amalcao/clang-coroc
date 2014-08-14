@@ -497,7 +497,6 @@ private:
   }
 
   void parseIncludeDirective() {
-    next();
     if (CurrentToken && CurrentToken->is(tok::less)) {
       next();
       while (CurrentToken) {
@@ -554,6 +553,7 @@ private:
     switch (CurrentToken->Tok.getIdentifierInfo()->getPPKeywordID()) {
     case tok::pp_include:
     case tok::pp_import:
+      next();
       parseIncludeDirective();
       break;
     case tok::pp_error:
@@ -587,8 +587,18 @@ public:
     // should not break the line).
     IdentifierInfo *Info = CurrentToken->Tok.getIdentifierInfo();
     if (Info && Info->getPPKeywordID() == tok::pp_import &&
-        CurrentToken->Next && CurrentToken->Next->is(tok::string_literal))
+        CurrentToken->Next && CurrentToken->Next->is(tok::string_literal)) {
+      next();
       parseIncludeDirective();
+      return LT_Other;
+    }
+
+    // If this line starts and ends in '<' and '>', respectively, it is likely
+    // part of "#define <a/b.h>".
+    if (CurrentToken->is(tok::less) && Line.Last->is(tok::greater)) {
+      parseIncludeDirective();
+      return LT_Other;
+    }
 
     while (CurrentToken) {
       if (CurrentToken->is(tok::kw_virtual))
@@ -629,9 +639,9 @@ private:
 
   void next() {
     if (CurrentToken) {
-      determineTokenType(*CurrentToken);
-      CurrentToken->BindingStrength = Contexts.back().BindingStrength;
       CurrentToken->NestingLevel = Contexts.size() - 1;
+      CurrentToken->BindingStrength = Contexts.back().BindingStrength;
+      determineTokenType(*CurrentToken);
       CurrentToken = CurrentToken->Next;
     }
 
@@ -691,11 +701,15 @@ private:
       for (FormatToken *Previous = Current.Previous;
            Previous && !Previous->isOneOf(tok::comma, tok::semi);
            Previous = Previous->Previous) {
-        if (Previous->isOneOf(tok::r_square, tok::r_paren))
+        if (Previous->isOneOf(tok::r_square, tok::r_paren)) {
           Previous = Previous->MatchingParen;
+          if (!Previous)
+            break;
+        }
         if ((Previous->Type == TT_BinaryOperator ||
              Previous->Type == TT_UnaryOperator) &&
-            Previous->isOneOf(tok::star, tok::amp)) {
+            Previous->isOneOf(tok::star, tok::amp) && Previous->Previous &&
+            Previous->Previous->isNot(tok::equal)) {
           Previous->Type = TT_PointerOrReference;
         }
       }
@@ -732,7 +746,8 @@ private:
       // Line.MightBeFunctionDecl can only be true after the parentheses of a
       // function declaration have been found. In this case, 'Current' is a
       // trailing token of this declaration and thus cannot be a name.
-      if (isStartOfName(Current) && !Line.MightBeFunctionDecl) {
+      if (isStartOfName(Current) &&
+          (!Line.MightBeFunctionDecl || Current.NestingLevel != 0)) {
         Contexts.back().FirstStartOfName = &Current;
         Current.Type = TT_StartOfName;
       } else if (Current.is(tok::kw_auto)) {
@@ -1290,7 +1305,9 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
 
     if (Style.AlwaysBreakAfterDefinitionReturnType &&
         InFunctionDecl && Current->Type == TT_FunctionDeclarationName &&
-        Line.Last->is(tok::l_brace))  // Only for definitions.
+        !Line.Last->isOneOf(tok::semi, tok::comment))  // Only for definitions.
+      // FIXME: Line.Last points to other characters than tok::semi
+      // and tok::lbrace.
       Current->MustBreakBefore = true;
 
     Current->CanBreakBefore =
