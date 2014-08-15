@@ -10490,6 +10490,11 @@ TreeTransform<Derived>::TransformCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
     llvm_unreachable("Cannot transform CoroCMakeChanExpr now");
 }
 
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformCoroCNullExpr(CoroCNullExpr *E) {
+    llvm_unreachable("Cannot transform CoroCNullExpr now");
+}
 
 
 } // end namespace clang

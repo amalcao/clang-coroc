@@ -579,6 +579,7 @@ KEYWORD(__CoroC_Chan,  KEYCOROC)
 KEYWORD(__CoroC_Select, KEYCOROC)
 KEYWORD(__CoroC_Case, KEYCOROC)
 KEYWORD(__CoroC_Default, KEYCOROC)
+KEYWORD(__CoroC_Null, KEYCOROC)
 
 // Coro-C builtin types
 KEYWORD(__task_t, KEYCOROC)

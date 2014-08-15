@@ -111,6 +111,13 @@ static Cl::Kinds ClassifyInternal(ASTContext &Ctx, const Expr *E) {
 #include "clang/AST/StmtNodes.inc"
     llvm_unreachable("cannot classify a statement");
 
+  case Expr::CoroCNullExprClass:
+    // CoroC Nil ptr, which type is void, and cannot be used as a L-Value.
+    return Cl::CL_Void;
+  case Expr::CoroCSpawnCallExprClass:
+  case Expr::CoroCMakeChanExprClass:
+    return Cl::CL_PRValue;
+
     // First come the expressions that are always lvalues, unconditionally.
   case Expr::ObjCIsaExprClass:
     // C++ [expr.prim.general]p1: A string literal is an lvalue.

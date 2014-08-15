@@ -2285,6 +2285,8 @@ DEF_TRAVERSE_STMT(CoroCCaseStmt, {
 DEF_TRAVERSE_STMT(CoroCSelectStmt, {
 	TRY_TO(TraverseStmt(S->getBody())); })
 
+DEF_TRAVERSE_STMT(CoroCNullExpr, {})
+
 // OpenMP directives.
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseOMPExecutableDirective(

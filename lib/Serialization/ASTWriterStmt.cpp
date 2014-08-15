@@ -1626,6 +1626,12 @@ void ASTStmtWriter::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
     Code = serialization::EXPR_COROC_CHAN;
 }
 
+void ASTStmtWriter::VisitCoroCNullExpr(CoroCNullExpr *E) {
+    VisitExpr(E);
+    Writer.AddSourceLocation(E->getLocStart(), Record); 
+    Code = serialization::EXPR_COROC_NULL;
+}
+
 void ASTStmtWriter::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
     VisitStmt(S);
     Writer.AddSourceLocation(S->getYieldLoc(), Record);

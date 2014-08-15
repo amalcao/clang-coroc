@@ -7283,6 +7283,8 @@ def err_chan_not_lvalue : Error<
 def err_chan_not_init : Error<
     "the chan elements' type must be specified before using">;
     
+def warn_use_chan_without_typecheck : Warning<
+    "using a chan without a elements' type declaration">;
 
 // __CoroC_Yield
 //  TODO

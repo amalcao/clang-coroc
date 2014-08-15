@@ -1368,6 +1368,7 @@ namespace clang {
 	  STMT_COROC_SELECT,
       EXPR_COROC_SPAWN,
       EXPR_COROC_CHAN,
+      EXPR_COROC_NULL,
     };
 
     /// \brief The kinds of designators that can occur in a

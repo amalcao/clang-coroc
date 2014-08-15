@@ -682,6 +682,9 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     Diag(Tok, diag::warn_cxx98_compat_nullptr);
     return Actions.ActOnCXXNullPtrLiteral(ConsumeToken());
 
+  case tok::kw___CoroC_Null:
+    return Actions.ActOnCoroCNullLiteral(ConsumeToken());
+
   case tok::annot_primary_expr:
     assert(Res.get() == nullptr && "Stray primary-expression annotation?");
     Res = getExprAnnotation(Tok);

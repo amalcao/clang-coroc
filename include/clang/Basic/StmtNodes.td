@@ -186,6 +186,7 @@ def AsTypeExpr : DStmt<Expr>;
 // CoroC Expressions.
 def CoroCSpawnCallExpr : DStmt<Expr>;
 def CoroCMakeChanExpr : DStmt<Expr>;
+def CoroCNullExpr : DStmt<Expr>;
 
 // OpenMP Directives.
 def OMPExecutableDirective : Stmt<1>;

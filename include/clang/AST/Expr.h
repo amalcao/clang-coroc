@@ -4652,6 +4652,30 @@ public:
     child_range children() { return child_range(); }
 };
 
+/// CoroCNullExpr - for channel send / recv when we ignore the data be transfered.
+class CoroCNullExpr : public Expr {
+  SourceLocation Loc;
+
+public:
+  CoroCNullExpr(SourceLocation SL, QualType T) 
+    : Expr(CoroCNullExprClass, T, VK_RValue, 
+           OK_Ordinary, false, false, false, false)
+    , Loc(SL) {}
+  
+  /// \brief Build an empty expression
+  explicit CoroCNullExpr(EmptyShell Empty)
+    : Expr(CoroCNullExprClass, Empty) { }
+
+  SourceLocation getLocStart() const LLVM_READONLY { return Loc; }
+  SourceLocation getLocEnd() const LLVM_READONLY { return Loc; }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == CoroCNullExprClass;
+  }
+
+  child_range children() { return child_range(); }
+};
+
 /// AsTypeExpr - Clang builtin function __builtin_astype [OpenCL 6.2.4.2]
 /// This AST node provides support for reinterpreting a type to another
 /// type of the same size.

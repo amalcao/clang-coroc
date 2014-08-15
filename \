@@ -42,24 +42,23 @@ namespace {
   static void GetChanFuncname(ASTContext& Ctx, Expr *RHS, unsigned Opc, 
                        std::string &funcName, bool &usePtr, 
                        bool sel = false, bool nonBlock = false) {
-    
-    bool isNil = (dyn_cast<CoroCNullExpr>(RHS) != nullptr);
     funcName = sel ? "__CoroC_Select_" : "__CoroC_Chan_";
 
     // FIXME : use a better way to get if the address of the RHS expr
     // can be caluculated by the '&' operator.
-    usePtr = !isNil || 
-             (RHS->isModifiableLvalue(Ctx, nullptr) == Expr::MLV_Valid);
+    // QualType Ty = RHS->getType().getCanonicalType();
+    // usePtr = (Opc == BO_Shr) || Ty->isStructureType() || Ty->isUnionType();
+    usePtr = RHS->isModifiableLvalue(Ctx, nullptr);
 
     if (Opc == BO_Shr) 
       funcName += "Recv";
-    else {
+    else if (usePtr)
       funcName += "Send";
-      if (!usePtr && !isNil)
-        funcName += "Expr";
-    }
+    else
+      funcName += "SendExpr";
 
-    if (nonBlock) funcName += "_NB";
+    if (nonBlock)
+      funcName += "_NB";
 
     return;
   }

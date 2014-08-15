@@ -3138,6 +3138,8 @@ public:
   										 Expr *E, Stmt *Body);
 
   StmtResult ActOnCoroCSelectStmt(SourceLocation SelectLoc, Stmt* Body);
+
+  ExprResult ActOnCoroCNullLiteral(SourceLocation Loc);
   // --
 
   VarDecl *getCopyElisionCandidate(QualType ReturnType, Expr *E,

@@ -1662,13 +1662,15 @@ void ASTStmtReader::VisitAsTypeExpr(AsTypeExpr *E) {
 // CoroC Expressions and Statements.
 //===----------------------------------------------------------------------===//
 void ASTStmtReader::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
-    VisitExpr(E);
-    E->SpawnLoc = ReadSourceLocation(Record, Idx);
+    llvm_unreachable("not implemented yet");
 }
 
 void ASTStmtReader::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
-    VisitExpr(E);
-    E->ChanLoc = ReadSourceLocation(Record, Idx);
+    llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCNullExpr(CoroCNullExpr *E) {
+    llvm_unreachable("not implemented yet");
 }
 
 void ASTStmtReader::VisitCoroCYieldStmt(CoroCYieldStmt *S) {

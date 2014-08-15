@@ -2378,6 +2378,8 @@ DEF_TRAVERSE_STMT(CoroCSelectStmt, {
 	TRY_TO(TraverseStmt(S->getBody()));
 	return true; })
 
+DEF_TRAVERSE_STMT(CoroCNullExpr, {})
+
 // OpenMP clauses.
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseOMPClause(OMPClause *C) {

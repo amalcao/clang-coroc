@@ -7551,9 +7551,17 @@ QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
                                  SourceLocation Loc, unsigned Opc) {
     // Get the underlying type  
     QualType LHSTy = LHS.get()->getType().getCanonicalType();
+    QualType RHSType = RHS.get()->getType().getCanonicalType();
 
     // Check if the operand is CoroC channel send / recv
     if (LangOpts.CoroC && LHSTy == Context.ChanRefTy) {
+      // Simplify the RHS expr ..
+      ParenExpr *PE;
+      while ((PE = dyn_cast<ParenExpr>(RHS.get())) != nullptr) {
+        RHS = ExprResult(PE->getSubExpr());
+      }
+      bool isNil = (dyn_cast<CoroCNullExpr>(RHS.get()) != nullptr);
+
       // Find the DeclRefExpr nodes in LHS
 	  ChanDeclCollector Visitor(&Context);
 	  Visitor.TraverseStmt(LHS.get());
@@ -7566,30 +7574,32 @@ QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
 
       if (VD->isChanDecl()) {
         QualType LHSType = VD->getChanElemType();
-        if (LHSType.isNull()) {
-          Diag(Loc, diag::err_chan_not_init)
-             << LHS.get()->getSourceRange();
-          return QualType();       
-        }
+        if (LHSType.isNull() || isNil) {
+          if (!isNil && (RHSType == Context.VoidTy))
+            return InvalidOperands(Loc, LHS, RHS);
 
-        QualType RHSType = RHS.get()->getType();
+          if (LHSType.isNull())
+            Diag(Loc, diag::warn_use_chan_without_typecheck)
+              << LHS.get()->getSourceRange();
+        } else {
+          // do the type checking ..
+          LHSType = Context.getCanonicalType(LHSType).getUnqualifiedType();
+          RHSType = Context.getCanonicalType(RHSType).getUnqualifiedType();
 
-        LHSType = Context.getCanonicalType(LHSType).getUnqualifiedType();
-        RHSType = Context.getCanonicalType(RHSType).getUnqualifiedType();
-
-        if (LHSType != RHSType) {
-          Diag(Loc, diag::err_chan_invalid_type)
-             << LHSType << RHSType 
-             << LHS.get()->getSourceRange() 
-             << RHS.get()->getSourceRange();
-          return QualType();          
+          if (LHSType != RHSType) {
+            Diag(Loc, diag::err_chan_invalid_type)
+              << LHSType << RHSType 
+              << LHS.get()->getSourceRange() 
+              << RHS.get()->getSourceRange();
+            return QualType();          
+          }
         }
       } else {
         return InvalidOperands(Loc, LHS, RHS);
       }
       
       // FIXME: Check if the RHS is NOT a pure right-value when it is a ">>" operand 
-      if (Opc == BO_Shl || 
+      if (Opc == BO_Shl || isNil || 
           RHS.get()->isModifiableLvalue(Context, &Loc) == Expr::MLV_Valid)
         return Context.BoolTy;
       
@@ -13729,3 +13739,8 @@ Sema::BuildCoroCMakeChanExpr(SourceLocation ChanLoc,
     return new (Context) CoroCMakeChanExpr(ChanLoc, GTLoc, TyRange, Context.ChanRefTy, T, E);
 }
 
+/// ActOnCoroCNullLiteral - Parse __CoroC_Null and build the Expr
+ExprResult
+Sema::ActOnCoroCNullLiteral(SourceLocation Loc) {
+  return new (Context) CoroCNullExpr(Loc, Context.VoidTy);
+}
