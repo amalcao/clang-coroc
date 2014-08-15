@@ -38,6 +38,29 @@ using namespace clang;
 using llvm::utostr;
 
 namespace {
+  /// \brief Get the runtime function name of the given channel operand
+  static void GetChanFuncname(Expr *RHS, unsigned Opc, 
+                       std::string &funcName, bool &usePtr, 
+                       bool sel = false, bool nonBlock = false) {
+    funcName = sel ? "__CoroC_Select_" : "__CoroC_Chan_";
+
+    QualType Ty = RHS->getType().getCanonicalType();
+    // FIXME : use a better way to get if the address of the RHS expr
+    // can be caluculated by the '&' operator.
+    usePtr = (Opc == BO_Shr) || Ty->isStructureType() || Ty->isUnionType();
+
+    if (Opc == BO_Shr) 
+      funcName += "Recv";
+    else if (usePtr)
+      funcName += "Send";
+    else
+      funcName += "SendExpr";
+
+    if (nonBlock)
+      funcName += "_NB";
+
+    return;
+  }
 
   /// \brief Thunk helper function for Spawn Operator
   class ThunkHelper {
@@ -127,26 +150,21 @@ namespace {
 	}
 	
 	void InsertCaseInitialization(BinaryOperator *BO) {
-	  bool send = BO->getOpcode() == BO_Shl;
-      std::string funcName;
+      std::string FuncName;
+      bool UsePtr;
+      GetChanFuncname(BO->getRHS(), BO->getOpcode(),
+                      FuncName, UsePtr, !SimpleWay, SimpleWay);
 
-      if (SimpleWay) {
-        funcName = (send ? "__CoroC_Chan_Send_NB" 
-                         : "__CoroC_Chan_Recv_NB");
-        
+      if (SimpleWay)
         Prologue << "\n\t\tbool __select_result_" << SelUID
-                 << " = " << funcName << "(";
-      } else {
-	    funcName = "__CoroC_Select_"; 
-	    funcName += (send ? "Send" : "Recv");
-
-	    Prologue << "\t\t" << funcName << "(__select_set_"
+                 << " = " << FuncName << "(";
+      else
+	    Prologue << "\t\t" << FuncName << "(__select_set_"
 	  			 << SelUID << ", ";
-      }
 	  
       Prologue << "*(" << Rewrite.ConvertToString(BO->getLHS()) << "), ";
 	  
-	  if (!send)
+	  if (UsePtr)
 	    Prologue << "&(" << Rewrite.ConvertToString(BO->getRHS()) <<")";
 	  else
 	    Prologue << Rewrite.ConvertToString(BO->getRHS());
@@ -399,7 +417,7 @@ void ThunkHelper::dumpThunkFunc(std::ostream &OS) {
   OS << ");\n\t";
   
   // 3. release the auto-references if any exisit
-  for (int k = 0; k < ArgStk.size(); ++k) {
+  for (unsigned k = 0; k < ArgStk.size(); ++k) {
     OS << "__refcnt_put(_arg->_param" << ArgStk[k] << ");\n\t";
   }
 
@@ -582,14 +600,19 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
   if (Opc != BO_Shl && Opc != BO_Shr) 
     return B;
   
-  // Check if the channel operator..
+  // Check if it's the channel operator..
   Expr *LHS = B->getLHS();
   Expr *RHS = B->getRHS();
 
   if (LHS->getType() == Context->ChanRefTy) {
+    // Check if we can get the address of RHS directly
+    bool UsePtr;
+    std::string FuncName;
+    GetChanFuncname(RHS, Opc, FuncName, UsePtr);
+
     // Insert the function call at the start of the first expr
-    Rewrite.InsertText(LHS->getLocStart(),
-      Opc == BO_Shl ? "__CoroC_Chan_Send(" : "__CoroC_Chan_Recv(", true);
+    FuncName += "(";
+    Rewrite.InsertText(LHS->getLocStart(), FuncName, true);
 
     // Replace the operator "<<" or ">>" with ","
     Rewrite.ReplaceText(B->getOperatorLoc(),
@@ -597,7 +620,7 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
   
     // The second param should be a pointer for runtime calls
     // FIXME: Check if the RHS is a L-Value for address operation!!
-    if (Opc == BO_Shl) {
+    if (!UsePtr) {
       Rewrite.InsertTextAfterToken(RHS->getLocEnd(), ")");
     } else {
       Rewrite.InsertText(RHS->getExprLoc(), "&(");
