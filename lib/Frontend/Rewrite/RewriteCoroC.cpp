@@ -48,14 +48,14 @@ namespace {
 
     // FIXME : use a better way to get if the address of the RHS expr
     // can be caluculated by the '&' operator.
-    usePtr = !isNil || 
+    usePtr = !isNil && 
              (RHS->isModifiableLvalue(Ctx, nullptr) == Expr::MLV_Valid);
 
     if (Opc == BO_Shr) 
       funcName += "Recv";
     else {
       funcName += "Send";
-      if (!usePtr && !isNil)
+      if (!usePtr)
         funcName += "Expr";
     }
 
