@@ -1,7 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -verify -std=c++11 -Wthread-safety -Wthread-safety-beta -Wthread-safety-negative -fcxx-exceptions %s
-
-// FIXME: should also run  %clang_cc1 -fsyntax-only -verify -Wthread-safety -std=c++11 -Wc++98-compat %s
-// FIXME: should also run  %clang_cc1 -fsyntax-only -verify -Wthread-safety %s
+// RUN: %clang_cc1 -fsyntax-only -verify -std=c++11 -Wthread-safety -Wthread-safety-beta -Wthread-safety-verbose -Wno-thread-safety-negative -fcxx-exceptions %s
 
 #define LOCKABLE            __attribute__ ((lockable))
 #define SCOPED_LOCKABLE     __attribute__ ((scoped_lockable))
@@ -44,61 +41,46 @@ class  __attribute__((lockable)) Mutex {
 };
 
 
-namespace SimpleTest {
-
-class Bar {
+class Test {
   Mutex mu;
-  int a GUARDED_BY(mu);
+  int a GUARDED_BY(mu);  // expected-note3 {{Guarded_by declared here.}}
 
-public:
-  void baz() EXCLUSIVE_LOCKS_REQUIRED(!mu) {
+  void foo1() EXCLUSIVE_LOCKS_REQUIRED(mu);
+  void foo2() SHARED_LOCKS_REQUIRED(mu);
+  void foo3() LOCKS_EXCLUDED(mu);
+
+  void test1() {  // expected-note {{Thread warning in function 'test1'}}
+    a = 0;        // expected-warning {{writing variable 'a' requires holding mutex 'mu' exclusively}}
+  }
+
+  void test2() {  // expected-note {{Thread warning in function 'test2'}}
+    int b = a;    // expected-warning {{reading variable 'a' requires holding mutex 'mu'}}
+  }
+
+  void test3() {  // expected-note {{Thread warning in function 'test3'}}
+    foo1();       // expected-warning {{calling function 'foo1' requires holding mutex 'mu' exclusively}}
+  }
+
+  void test4() {  // expected-note {{Thread warning in function 'test4'}}
+    foo2();       // expected-warning {{calling function 'foo2' requires holding mutex 'mu'}}
+  }
+
+  void test5() {  // expected-note {{Thread warning in function 'test5'}}
+    mu.ReaderLock();
+    foo1();       // expected-warning {{calling function 'foo1' requires holding mutex 'mu' exclusively}}
+    mu.Unlock();
+  }
+
+  void test6() {  // expected-note {{Thread warning in function 'test6'}}
+    mu.ReaderLock();
+    a = 0;        // expected-warning {{writing variable 'a' requires holding mutex 'mu' exclusively}}
+    mu.Unlock();
+  }
+
+  void test7() {  // expected-note {{Thread warning in function 'test7'}}
     mu.Lock();
-    a = 0;
+    foo3();       // expected-warning {{cannot call function 'foo3' while mutex 'mu' is held}}
     mu.Unlock();
   }
 };
 
-
-class Foo {
-  Mutex mu;
-  int a GUARDED_BY(mu);
-
-public:
-  void foo() {
-    mu.Lock();    // expected-warning {{acquiring mutex 'mu' requires negative capability '!mu'}}
-    baz();        // expected-warning {{cannot call function 'baz' while mutex 'mu' is held}}
-    bar();
-    mu.Unlock();
-  }
-
-  void bar() {
-    baz();        // expected-warning {{calling function 'baz' requires holding  '!mu'}}
-  }
-
-  void baz() EXCLUSIVE_LOCKS_REQUIRED(!mu) {
-    mu.Lock();
-    a = 0;
-    mu.Unlock();
-  }
-
-  void test() {
-    Bar b;
-    b.baz();     // no warning -- in different class.
-  }
-
-  void test2() {
-    mu.Lock();   // expected-warning {{acquiring mutex 'mu' requires negative capability '!mu'}}
-    a = 0;
-    mu.Unlock();
-    baz();       // no warning -- !mu in set.
-  }
-
-  void test3() EXCLUSIVE_LOCKS_REQUIRED(!mu) {
-    mu.Lock();
-    a = 0;
-    mu.Unlock();
-    baz();       // no warning -- !mu in set.
-  }
-};
-
-}  // end namespace SimpleTest
