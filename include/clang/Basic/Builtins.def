@@ -1175,6 +1175,18 @@ LIBBUILTIN(__CoroC_Chan_Close, "vr", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Self, "t", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Exit, "vi", "ri", "libcoroc.h", COROC_LANG)
 
+LIBBUILTIN(__CoroC_Task_Send, "btCv*z", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Task_Send_NB, "btCv*z", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Task_Recv, "bv*z", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Task_Recv_NB, "bv*z", "i", "libcoroc.h", COROC_LANG)
+
+LIBBUILTIN(__CoroC_Timer_At, "rULLi", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Timer_After, "rULLi", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Ticker, "rULLi", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Stop, "vr", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Now, "ULLi", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Sleep, "vULLi", "i", "libcoroc.h", COROC_LANG)
+
 // Annotation function
 BUILTIN(__builtin_annotation, "v.", "tn")
 

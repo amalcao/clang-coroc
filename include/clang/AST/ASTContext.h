@@ -201,6 +201,9 @@ class ASTContext : public RefCountedBase<ASTContext> {
   TemplateTemplateParmDecl *
     getCanonicalTemplateTemplateParmDecl(TemplateTemplateParmDecl *TTP) const;
 
+  /// \brief The typedef for the __time_t type for CoroC
+  mutable TypedefDecl *Time64Decl;
+
   /// \brief The typedef for the __int128_t type.
   mutable TypedefDecl *Int128Decl;
 
@@ -851,6 +854,9 @@ public:
 
   /// \brief Create a new implicit TU-level typedef declaration.
   TypedefDecl *buildImplicitTypedef(QualType T, StringRef Name) const;
+
+  /// \brief Retrieve the declaration for the 64-bit unsigned time type
+  TypedefDecl *getTime64Decl() const;
 
   /// \brief Retrieve the declaration for the 128-bit signed integer type.
   TypedefDecl *getInt128Decl() const;

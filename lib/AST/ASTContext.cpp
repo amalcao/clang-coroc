@@ -895,6 +895,12 @@ TypedefDecl *ASTContext::buildImplicitTypedef(QualType T,
   return NewDecl;
 }
 
+TypedefDecl *ASTContext::getTime64Decl() const {
+  if (!Time64Decl)
+    Time64Decl = buildImplicitTypedef(UnsignedLongLongTy, "__time_t");
+  return Time64Decl;
+}
+
 TypedefDecl *ASTContext::getInt128Decl() const {
   if (!Int128Decl)
     Int128Decl = buildImplicitTypedef(Int128Ty, "__int128_t");

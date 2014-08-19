@@ -38,6 +38,11 @@ using namespace clang;
 using llvm::utostr;
 
 namespace {
+  /// \brief Get the expansion location of a keyword
+  static SourceLocation GetExpansionLoc(Rewriter& Rewrite, SourceLocation Loc) {
+    return Rewrite.getSourceMgr().getExpansionLoc(Loc);
+  }
+
   /// \brief Get the runtime function name of the given channel operand
   static void GetChanFuncname(ASTContext& Ctx, Expr *RHS, unsigned Opc, 
                        std::string &funcName, bool &usePtr, 
@@ -183,7 +188,9 @@ namespace {
 	  else
 		SS << "else if (";
 
-      SourceRange SR(Case->getLocStart());
+      SourceLocation SL = 
+        GetExpansionLoc(Rewrite, Case->getLocStart());
+      SourceRange SR(SL);
 
 	  Expr *E = Case->getChanOpExpr();
 	  if (E != nullptr) {
@@ -540,7 +547,7 @@ void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc, 
     Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
   }
   if (addWrapper) {
-    StartLoc = Rewrite.getSourceMgr().getExpansionLoc(StartLoc);
+    StartLoc = GetExpansionLoc(Rewrite, StartLoc);
     if (Ty == Context->ChanRefTy) 
       Rewrite.ReplaceText(StartLoc, "__CXX_refcnt_t<__chan_t >");
     else
@@ -640,6 +647,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
   int numArgs = CE->getNumArgs();
   bool noThunk = false;
   
+  SourceLocation SpawnLoc = GetExpansionLoc(Rewrite, E->getLocStart());
   if (numArgs == 1) {
     Expr *Arg = CE->getArg(0);
     noThunk = Arg->getType().getTypePtr()->isPointerType();
@@ -672,7 +680,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
     Thunk->DumpThunkCallPrologue(SS, CE, paramName.str());
     
     // insert the prologue before the __CoroC_Spawn keyword
-    Rewrite.InsertText(E->getInsertLoc(), SS.str());
+    Rewrite.InsertText(SpawnLoc, SS.str());
     
     // replace all the CE's text ..
     std::string funcName;
@@ -702,12 +710,12 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 /// Transform the __CoroC_Chan keyword
 bool CoroCRecursiveASTVisitor::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
   Expr *CE = E->getCapExpr();
-
+  SourceLocation ChanLoc = GetExpansionLoc(Rewrite, E->getLocEnd());
   // Transform to runtime call:
   //  __CoroC_Chan(sizeof type, (expr));
 
   // replace '<' to '('
-  SourceLocation Loc = getNextTokLocStart(E->getLocEnd());
+  SourceLocation Loc = getNextTokLocStart(ChanLoc);
   Rewrite.ReplaceText(Loc, 1, "(sizeof(");
 
   // insert '>' before the ',' or '>'
@@ -727,11 +735,11 @@ bool CoroCRecursiveASTVisitor::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
 /// Transform the __CoroC_Quit keyword
 bool CoroCRecursiveASTVisitor::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
   Expr *RE = S->getReturnExpr();
-  
+  SourceLocation QuitLoc = GetExpansionLoc(Rewrite, S->getLocEnd());
   if (RE == nullptr) {
-    Rewrite.InsertTextAfterToken(S->getLocEnd(), "(0)");
+    Rewrite.InsertTextAfterToken(QuitLoc, "(0)");
   } else {
-    Rewrite.InsertTextAfterToken(S->getLocEnd(), "(");
+    Rewrite.InsertTextAfterToken(QuitLoc, "(");
     Rewrite.InsertTextAfterToken(RE->getLocEnd(), ")");
   }
   return true;
@@ -739,7 +747,8 @@ bool CoroCRecursiveASTVisitor::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
 
 /// Transform the __CoroC_Yield keyword
 bool CoroCRecursiveASTVisitor::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
-  Rewrite.InsertTextAfterToken(S->getLocEnd(), "()");
+  SourceLocation YieldLoc = GetExpansionLoc(Rewrite, S->getLocEnd());
+  Rewrite.InsertTextAfterToken(YieldLoc, "()");
   return true;
 }
 
@@ -764,7 +773,8 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
   SH->GenPrologueAndEpilogue();
   pushSelStk(SH);
 
-  Rewrite.RemoveText(SourceRange(S->getSelectLoc()));
+  SourceLocation SL = GetExpansionLoc(Rewrite, S->getSelectLoc());
+  Rewrite.RemoveText(SourceRange(SL));
   return true;
 }
 
