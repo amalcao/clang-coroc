@@ -70,6 +70,7 @@ enum InputKind {
   IK_PreprocessedCXX,
   IK_PreprocessedObjC,
   IK_PreprocessedObjCXX,
+  IK_PreprocessedCoroC,
   IK_OpenCL,
   IK_CUDA,
   IK_AST,

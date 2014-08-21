@@ -169,7 +169,7 @@ const {
              (PhaseArg = DAL.getLastArg(options::OPT_verify_pch)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_objc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_legacy_objc)) ||
-             (PhaseArg = DAL.getLastArg(options::OPT_rewrite_coro_c)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT_rewrite_coroc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__migrate)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__analyze,
                                         options::OPT__analyze_auto)) ||
@@ -1059,6 +1059,14 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
               Diag(clang::diag::warn_drv_treating_input_as_cxx)
                 << getTypeName(OldTy) << getTypeName(Ty);
           }
+
+          // If the driver is invoked as CoroC compiler (like clang-co) it
+          // should autodetect some input files as CoroC type.
+          if (IsCOMode()) {
+            Ty = (Ty == types::TY_PP_C) 
+                    ? types::TY_PP_CoroC
+                    : types::TY_CoroC;
+          }
         }
 
         // -ObjC and -ObjC++ override the default language, but only for "source
@@ -1310,7 +1318,7 @@ Action *Driver::ConstructPhaseAction(const ArgList &Args, phases::ID Phase,
       return new CompileJobAction(Input, types::TY_RewrittenObjC);
     } else if (Args.hasArg(options::OPT_rewrite_legacy_objc)) {
       return new CompileJobAction(Input, types::TY_RewrittenLegacyObjC);
-    } else if (Args.hasArg(options::OPT_rewrite_coro_c)) {
+    } else if (Args.hasArg(options::OPT_rewrite_coroc)) {
       return new CompileJobAction(Input, types::TY_RewriteCoroC);
     } else if (Args.hasArg(options::OPT__analyze, options::OPT__analyze_auto)) {
       return new AnalyzeJobAction(Input, types::TY_Plist);
@@ -1491,7 +1499,7 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
       !C.getArgs().hasArg(options::OPT_traditional_cpp) &&
       !C.getArgs().hasArg(options::OPT_save_temps) &&
       !C.getArgs().hasArg(options::OPT_rewrite_objc) &&
-      !C.getArgs().hasArg(options::OPT_rewrite_coro_c) &&
+      !C.getArgs().hasArg(options::OPT_rewrite_coroc) &&
       ToolForJob->hasIntegratedCPP())
     Inputs = &(*Inputs)[0]->getInputs();
 

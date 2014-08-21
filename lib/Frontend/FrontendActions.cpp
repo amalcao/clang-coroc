@@ -677,6 +677,7 @@ void PrintPreambleAction::ExecuteAction() {
   case IK_PreprocessedCXX:
   case IK_PreprocessedObjC:
   case IK_PreprocessedObjCXX:
+  case IK_PreprocessedCoroC:
   case IK_AST:
   case IK_LLVM_IR:
     // We can't do anything with these.

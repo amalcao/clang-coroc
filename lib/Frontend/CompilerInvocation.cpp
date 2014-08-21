@@ -771,7 +771,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Opts.ProgramAction = frontend::RewriteMacros; break;
     case OPT_rewrite_objc:
       Opts.ProgramAction = frontend::RewriteObjC; break;
-    case OPT_rewrite_coro_c:
+    case OPT_rewrite_coroc:
       Opts.ProgramAction = frontend::RewriteCoroC; break;
     case OPT_rewrite_test:
       Opts.ProgramAction = frontend::RewriteTest; break;
@@ -928,7 +928,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       .Case("objective-c++-header", IK_ObjCXX)
       .Cases("ast", "pcm", IK_AST)
       .Case("ir", IK_LLVM_IR)
-      .Case("co", IK_CoroC)
+      .Case("coroc-cpp-output", IK_PreprocessedCoroC)
+      .Case("coroc", IK_CoroC)
       .Default(IK_None);
     if (DashX == IK_None)
       Diags.Report(diag::err_drv_invalid_value)
@@ -1105,7 +1106,8 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
              IK == IK_PreprocessedObjC ||
              IK == IK_PreprocessedObjCXX) {
     Opts.ObjC1 = Opts.ObjC2 = 1;
-  } else if (IK == IK_CoroC) {
+  } else if (IK == IK_CoroC ||
+             IK == IK_PreprocessedCoroC) {
     Opts.CoroC = 1;
   }
 
@@ -1126,8 +1128,9 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
     case IK_C:
     case IK_PreprocessedC:
     case IK_ObjC:
-    case IK_CoroC:
     case IK_PreprocessedObjC:
+    case IK_CoroC:
+    case IK_PreprocessedCoroC:
       LangStd = LangStandard::lang_gnu99;
       break;
     case IK_CXX:
@@ -1274,6 +1277,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
       case IK_CoroC:
       case IK_PreprocessedC:
       case IK_PreprocessedObjC:
+      case IK_PreprocessedCoroC:
         if (!(Std.isC89() || Std.isC99()))
           Diags.Report(diag::err_drv_argument_not_allowed_with)
             << A->getAsString(Args) << "C/ObjC";
@@ -1429,7 +1433,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                                    Opts.ConstStrings);
 
   // Check the CoroC support 
-  Opts.CoroC = Opts.CoroC || Args.hasArg(OPT_rewrite_coro_c);
+  Opts.CoroC = Opts.CoroC || Args.hasArg(OPT_rewrite_coroc);
   if (Opts.CoroC && (Opts.ObjC1 || Opts.ObjC2 || Opts.CPlusPlus))
     Diags.Report(diag::err_drv_coro_not_c); //TODO
 
