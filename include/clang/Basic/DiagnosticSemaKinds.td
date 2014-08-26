@@ -7281,6 +7281,8 @@ def err_cannot_spawn_builtin: Error<
   "builtin function cannot be spawned">;
 
 // __CoroC_Chan
+def err_chan_invalid_scope : Error<
+    "__CoroC_Chan not allowed in this scope">;
 def err_chan_invalid_param : Error<
     "the second param of __CoroC_Chan must be an integar typed expr">;
 def err_chan_invalid_type : Error<
@@ -7297,7 +7299,8 @@ def warn_use_chan_without_typecheck : Warning<
 //  TODO
 
 // __CoroC_Quit
-//  TODO
+def err_not_quit_with_int : Error<
+    "__CoroC_Quit must follow an expression with integer type">;
 
 // __CoroC_Select
 def err_case_op_not_chan_ops : Error<

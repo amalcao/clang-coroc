@@ -37,7 +37,7 @@
 using namespace clang;
 using llvm::utostr;
 
-namespace {
+namespace ict {
   /// \brief Get the expansion location of a keyword
   static SourceLocation GetExpansionLoc(Rewriter& Rewrite, SourceLocation Loc) {
     return Rewrite.getSourceMgr().getExpansionLoc(Loc);
@@ -300,6 +300,8 @@ namespace {
   };
 }
 
+using namespace ict;
+
 /// Match if the current thunk is suitable for the given CallExpr
 bool ThunkHelper::MatchCallExpr(CallExpr *CE) {
   if (!TheCallExpr || !CE) return false;
@@ -387,13 +389,21 @@ void ThunkHelper::dumpThunkFunc(std::ostream &OS) {
   
   // Generate the func body:
 
-  // 1. callee's declaration
-  FunctionDecl *FD = TheCallExpr->getDirectCallee();
-  OS << FD->getReturnType().getAsString() << " ";
+  // 1. callee's function type
+  QualType T = E->getType();
+  assert(T->isPointerType());
+
+  const Type *Ty = T->getPointeeType()->getUnqualifiedDesugaredType();
+  assert(isa<FunctionProtoType>(Ty));
+
+  const FunctionProtoType *FuncTy = 
+            reinterpret_cast<const FunctionProtoType*>(Ty);
+
+  OS << TheCallExpr->getType().getAsString() << " ";
   OS << Rewrite.ConvertToString(E) << "(";
   
   for (unsigned i = 0; i < numArgs; ++i) {
-    QualType Ty = FD->getParamDecl(i)->getOriginalType();
+    QualType Ty = FuncTy->getParamType(i);
     if (Ty == Context->ChanRefTy || Ty == Context->TaskRefTy)
       OS << "__CXX_refcnt_t<" << Ty.getAsString() << " >";
     else

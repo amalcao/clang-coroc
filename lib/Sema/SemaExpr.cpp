@@ -13695,11 +13695,18 @@ Sema::ActOnObjCBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind) {
 /// ActOnCoroCSpawnCallExpr - Parse __CoroC_Spawn
 ExprResult
 Sema::ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E) {
-    if (FunctionScopes.size() < 1 /*||
-        getCurFunction()->CompoundScope.size() < 1*/) {
+    if (FunctionScopes.size() < 1 ||
+        getCurFunction()->CompoundScopes.size() < 1) {
       Diag(SpawnLoc, diag::err_spawn_invalid_scope);
       return ExprError();
     }
+    
+    // check if the E is a CallExpr
+    if (!isa<CallExpr>(E)) {
+      Diag(E->getExprLoc(), diag::err_not_a_call);
+      return ExprError();
+    }
+
     return BuildCoroCSpawnCallExpr(SpawnLoc, E);
 }
 
@@ -13716,7 +13723,13 @@ Sema::ActOnCoroCMakeChanExpr(SourceLocation ChanLoc,
                              SourceLocation GTLoc, 
                              SourceRange TyRange, 
                              ParsedType Ty, Expr *E) {
-    // TODO
+    // check if this expr is called in a valid scope
+    if (FunctionScopes.size() < 1 ||
+        getCurFunction()->CompoundScopes.size() < 1) {
+      Diag(ChanLoc, diag::err_chan_invalid_scope);
+      return ExprError();
+    }
+
     TypeSourceInfo *TSInfo = nullptr;
     QualType T = GetTypeFromParser(Ty, &TSInfo);
 

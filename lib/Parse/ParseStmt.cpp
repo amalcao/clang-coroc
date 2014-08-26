@@ -1843,7 +1843,10 @@ StmtResult Parser::ParseReturnStatement() {
   return Actions.ActOnReturnStmt(ReturnLoc, R.get(), getCurScope());
 }
 
-/// for CoroC select statements
+/// ParseCoroCCaseOrDefaultStatement:
+///     coroc-case-statement:
+///         "__CoroC_Case" "(" expression ")" compound-statement
+///         "__CoroC_Default" compound-statement
 StmtResult Parser::ParseCoroCCaseOrDefaultStatement() {
   ExprResult Expr;
   StmtResult Body;
@@ -1873,7 +1876,12 @@ StmtResult Parser::ParseCoroCCaseOrDefaultStatement() {
   return Actions.ActOnCoroCCaseOrDefaultStmt(Loc, Expr.get(), Body.get());
 }
 
-
+/// ParseCoroCSelectStatement:
+///     coroc-case-list-statement:
+///         coroc-case-statement coroc-case-list-statement?
+///
+///     coroc-selection-statement:
+///         "__CoroC_Select" "{" coroc-case-list-statement "}"
 StmtResult Parser::ParseCoroCSelectStatement() {
   assert(Tok.is(tok::kw___CoroC_Select) && "Not a select stmt!");
   SourceLocation Loc = ConsumeToken(); // eat '__CoroC_Select'

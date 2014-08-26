@@ -2415,12 +2415,19 @@ Sema::ActOnBreakStmt(SourceLocation BreakLoc, Scope *CurScope) {
 
 StmtResult
 Sema::ActOnCoroCYieldStmt(SourceLocation YieldLoc) {
-    return new (Context) CoroCYieldStmt(YieldLoc);
+  return new (Context) CoroCYieldStmt(YieldLoc);
 }
 
 StmtResult
 Sema::ActOnCoroCQuitStmt(SourceLocation QuitLoc, Expr *E) {
-    return new (Context) CoroCQuitStmt(QuitLoc, E);
+  // check if the Expr E is an integar
+  if (E != nullptr) { 
+    QualType Ty = E->getType();
+    if (!Ty->isIntegerType()) 
+      return StmtError(Diag(QuitLoc, diag::err_not_quit_with_int));
+  }
+
+  return new (Context) CoroCQuitStmt(QuitLoc, E);
 }
 
 StmtResult
