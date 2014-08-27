@@ -79,6 +79,8 @@ namespace ict {
     bool hasDump;
   
     void dumpThunkStruct(std::ostream& OS);
+    void dumpThunkFuncArgsType(std::ostream& OS, 
+                               const FunctionProtoType* FuncTy);
     void dumpThunkFunc(std::ostream& OS);
 
   public:
@@ -327,7 +329,7 @@ void ThunkHelper::DumpThunkCallPrologue(std::ostream &OS,
                                         CallExpr *CE,
                                         std::string paramName) {
   // If the func call without any arg, ignore it!
-  if (CE->getNumArgs() == 0) return;
+  // if (CE->getNumArgs() == 0) return;
   
   OS << "\n\tstruct __thunk_struct_" << ThunkUID 
      << "*  " << paramName << " = (" 
@@ -353,11 +355,15 @@ void ThunkHelper::DumpThunkCallPrologue(std::ostream &OS,
 
     OS << ";\n\t";
   }
+
+  // Init the function pointer
+  OS << paramName << "->_fp = (void*)(" 
+     << Rewrite.ConvertToString(CE->getCallee()) << ");\n\t";
 }
 
 /// Dump the thunk param struct's body
 void ThunkHelper::dumpThunkStruct(std::ostream &OS) {
-  if (TheCallExpr->getNumArgs() == 0) return;
+  //if (TheCallExpr->getNumArgs() == 0) return;
 
   OS << "\nstruct __thunk_struct_" 
      << ThunkUID << " { \n";
@@ -368,7 +374,24 @@ void ThunkHelper::dumpThunkStruct(std::ostream &OS) {
     OS << "\t" << (*it)->getType().getAsString()
        << " _param" << i++ << ";\n";
   }
-  OS << "};\n"; 
+  OS << "\tvoid *_fp;\n};\n"; 
+}
+
+/// Dump the thunk function's arglist types
+void ThunkHelper::dumpThunkFuncArgsType(std::ostream &OS, 
+                                    const FunctionProtoType *FuncTy) {
+
+   unsigned numArgs = FuncTy->getNumParams();
+   for (unsigned i = 0; i < numArgs; ++i) {
+    QualType Ty = FuncTy->getParamType(i);
+    if (Ty == Context->ChanRefTy || Ty == Context->TaskRefTy)
+      OS << "__CXX_refcnt_t<" << Ty.getAsString() << " >";
+    else
+      OS << Ty.getAsString();
+    
+    if (i < numArgs - 1)
+      OS << ", ";
+  }
 }
 
 /// Dump the thunk function defination
@@ -379,17 +402,17 @@ void ThunkHelper::dumpThunkFunc(std::ostream &OS) {
   // Generate the func declaration:
   OS << "\nstatic int __thunk_helper_"
      << ThunkUID << "(";
-
+/**
   if (numArgs == 0)
     OS << "void*";
-  else
+  else*/
     OS << "struct __thunk_struct_" << ThunkUID << " *";
   
   OS << "_arg) {\n\t";
   
   // Generate the func body:
 
-  // 1. callee's function type
+  // 1. decalarate a pointer to the callee
   QualType T = E->getType();
   assert(T->isPointerType());
 
@@ -399,25 +422,17 @@ void ThunkHelper::dumpThunkFunc(std::ostream &OS) {
   const FunctionProtoType *FuncTy = 
             reinterpret_cast<const FunctionProtoType*>(Ty);
 
-  OS << TheCallExpr->getType().getAsString() << " ";
-  OS << Rewrite.ConvertToString(E) << "(";
+  OS << TheCallExpr->getType().getAsString() << " (*fp) (";
   
-  for (unsigned i = 0; i < numArgs; ++i) {
-    QualType Ty = FuncTy->getParamType(i);
-    if (Ty == Context->ChanRefTy || Ty == Context->TaskRefTy)
-      OS << "__CXX_refcnt_t<" << Ty.getAsString() << " >";
-    else
-      OS << Ty.getAsString();
-    
-    if (i < numArgs - 1)
-      OS << ", ";
-  }
+  dumpThunkFuncArgsType(OS, FuncTy);
 
   OS << ");\n\t";
 
+  // 2. assign the callee address to the `fp'
+  OS << "fp = (typeof(fp))(_arg->_fp);\n\t";
 
-  // 2. calling the thunk helper function
-  OS << Rewrite.ConvertToString(E) << "(";
+  // 3. calling the thunk helper function
+  OS << "fp(";
 
   std::vector<int> ArgStk;
   if (numArgs > 0) {
