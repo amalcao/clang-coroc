@@ -852,12 +852,11 @@ CollectRecordLambdaFields(const CXXRecordDecl *CXXDecl,
                           C.getLocation(), Field->getAccess(),
                           layout.getFieldOffset(fieldno), VUnit, RecordTy);
       elements.push_back(fieldType);
-    } else {
+    } else if (C.capturesThis()) {
       // TODO: Need to handle 'this' in some way by probably renaming the
       // this of the lambda class and having a field member of 'this' or
       // by using AT_object_pointer for the function and having that be
       // used as 'this' for semantic references.
-      assert(C.capturesThis() && "Field that isn't captured and isn't this?");
       FieldDecl *f = *Field;
       llvm::DIFile VUnit = getOrCreateFile(f->getLocation());
       QualType type = f->getType();
@@ -2596,8 +2595,7 @@ void CGDebugInfo::CreateLexicalBlock(SourceLocation Loc) {
   llvm::DIDescriptor D = DBuilder.createLexicalBlock(
       llvm::DIDescriptor(LexicalBlockStack.empty() ? nullptr
                                                    : LexicalBlockStack.back()),
-      getOrCreateFile(CurLoc), getLineNumber(CurLoc), getColumnNumber(CurLoc),
-      0);
+      getOrCreateFile(CurLoc), getLineNumber(CurLoc), getColumnNumber(CurLoc));
   llvm::MDNode *DN = D;
   LexicalBlockStack.push_back(DN);
 }

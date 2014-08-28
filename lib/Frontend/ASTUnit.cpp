@@ -105,7 +105,8 @@ static llvm::sys::SmartMutex<false> &getOnDiskMutex() {
 
 static void cleanupOnDiskMapAtExit();
 
-typedef llvm::DenseMap<const ASTUnit *, OnDiskData *> OnDiskDataMap;
+typedef llvm::DenseMap<const ASTUnit *,
+                       std::unique_ptr<OnDiskData>> OnDiskDataMap;
 static OnDiskDataMap &getOnDiskDataMap() {
   static OnDiskDataMap M;
   static bool hasRegisteredAtExit = false;
@@ -132,9 +133,9 @@ static OnDiskData &getOnDiskData(const ASTUnit *AU) {
   // DenseMap.
   llvm::MutexGuard Guard(getOnDiskMutex());
   OnDiskDataMap &M = getOnDiskDataMap();
-  OnDiskData *&D = M[AU];
+  auto &D = M[AU];
   if (!D)
-    D = new OnDiskData();
+    D = llvm::make_unique<OnDiskData>();
   return *D;
 }
 
@@ -150,7 +151,6 @@ static void removeOnDiskEntry(const ASTUnit *AU) {
   OnDiskDataMap::iterator I = M.find(AU);
   if (I != M.end()) {
     I->second->Cleanup();
-    delete I->second;
     M.erase(AU);
   }
 }
@@ -635,8 +635,8 @@ ASTDeserializationListener *ASTUnit::getDeserializationListener() {
   return nullptr;
 }
 
-llvm::MemoryBuffer *ASTUnit::getBufferForFile(StringRef Filename,
-                                              std::string *ErrorStr) {
+std::unique_ptr<llvm::MemoryBuffer>
+ASTUnit::getBufferForFile(StringRef Filename, std::string *ErrorStr) {
   assert(FileMgr);
   return FileMgr->getBufferForFile(Filename, ErrorStr);
 }
@@ -1205,7 +1205,7 @@ ASTUnit::ComputePreamble(CompilerInvocation &Invocation,
             CreatedBuffer = false;
           }
 
-          Buffer = getBufferForFile(RF.second);
+          Buffer = getBufferForFile(RF.second).release();
           if (!Buffer)
             return std::make_pair(nullptr, std::make_pair(0, true));
           CreatedBuffer = true;
@@ -1234,7 +1234,7 @@ ASTUnit::ComputePreamble(CompilerInvocation &Invocation,
   
   // If the main source file was not remapped, load it now.
   if (!Buffer) {
-    Buffer = getBufferForFile(FrontendOpts.Inputs[0].getFile());
+    Buffer = getBufferForFile(FrontendOpts.Inputs[0].getFile()).release();
     if (!Buffer)
       return std::make_pair(nullptr, std::make_pair(0, true));
 
@@ -1451,10 +1451,8 @@ ASTUnit::getMainBufferWithPrecompiledPreamble(
                               PreambleInvocation->getDiagnosticOpts());
         getDiagnostics().setNumWarnings(NumWarningsInPreamble);
 
-        return std::unique_ptr<llvm::MemoryBuffer>(
-            llvm::MemoryBuffer::getMemBufferCopy(
-                NewPreamble.first->getBuffer(),
-                FrontendOpts.Inputs[0].getFile()));
+        return llvm::MemoryBuffer::getMemBufferCopy(
+            NewPreamble.first->getBuffer(), FrontendOpts.Inputs[0].getFile());
       }
     }
 
@@ -1504,8 +1502,8 @@ ASTUnit::getMainBufferWithPrecompiledPreamble(
                                                   + NewPreamble.second.first);
   PreambleEndsAtStartOfLine = NewPreamble.second.second;
 
-  PreambleBuffer.reset(llvm::MemoryBuffer::getMemBufferCopy(
-      NewPreamble.first->getBuffer().slice(0, Preamble.size()), MainFilename));
+  PreambleBuffer = llvm::MemoryBuffer::getMemBufferCopy(
+      NewPreamble.first->getBuffer().slice(0, Preamble.size()), MainFilename);
 
   // Remap the main source file to the preamble buffer.
   StringRef MainFilePath = FrontendOpts.Inputs[0].getFile();
@@ -1649,9 +1647,8 @@ ASTUnit::getMainBufferWithPrecompiledPreamble(
     PreambleTopLevelHashValue = CurrentTopLevelHashValue;
   }
 
-  return std::unique_ptr<llvm::MemoryBuffer>(
-      llvm::MemoryBuffer::getMemBufferCopy(NewPreamble.first->getBuffer(),
-                                           MainFilename));
+  return llvm::MemoryBuffer::getMemBufferCopy(NewPreamble.first->getBuffer(),
+                                              MainFilename);
 }
 
 void ASTUnit::RealizeTopLevelDeclsFromPreamble() {

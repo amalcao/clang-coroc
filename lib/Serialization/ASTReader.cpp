@@ -1224,9 +1224,9 @@ bool ASTReader::ReadSLocEntry(int ID) {
         return true;
       }
       
-      llvm::MemoryBuffer *Buffer
+      std::unique_ptr<llvm::MemoryBuffer> Buffer
         = llvm::MemoryBuffer::getMemBuffer(Blob.drop_back(1), File->getName());
-      SourceMgr.overrideFileContents(File, Buffer);
+      SourceMgr.overrideFileContents(File, std::move(Buffer));
     }
 
     break;
@@ -1251,10 +1251,10 @@ bool ASTReader::ReadSLocEntry(int ID) {
       return true;
     }
 
-    llvm::MemoryBuffer *Buffer
-      = llvm::MemoryBuffer::getMemBuffer(Blob.drop_back(1), Name);
-    SourceMgr.createFileID(Buffer, FileCharacter, ID, BaseOffset + Offset,
-                           IncludeLoc);
+    std::unique_ptr<llvm::MemoryBuffer> Buffer =
+        llvm::MemoryBuffer::getMemBuffer(Blob.drop_back(1), Name);
+    SourceMgr.createFileID(Buffer.release(), FileCharacter, ID,
+                           BaseOffset + Offset, IncludeLoc);
     break;
   }
 
@@ -3521,10 +3521,9 @@ bool ASTReader::isGlobalIndexUnavailable() const {
 static void updateModuleTimestamp(ModuleFile &MF) {
   // Overwrite the timestamp file contents so that file's mtime changes.
   std::string TimestampFilename = MF.getTimestampFilename();
-  std::string ErrorInfo;
-  llvm::raw_fd_ostream OS(TimestampFilename.c_str(), ErrorInfo,
-                          llvm::sys::fs::F_Text);
-  if (!ErrorInfo.empty())
+  std::error_code EC;
+  llvm::raw_fd_ostream OS(TimestampFilename, EC, llvm::sys::fs::F_Text);
+  if (EC)
     return;
   OS << "Timestamp file\n";
 }
@@ -4031,8 +4030,8 @@ std::string ASTReader::getOriginalSourceFile(const std::string &ASTFileName,
                                              DiagnosticsEngine &Diags) {
   // Open the AST file.
   std::string ErrStr;
-  std::unique_ptr<llvm::MemoryBuffer> Buffer;
-  Buffer.reset(FileMgr.getBufferForFile(ASTFileName, &ErrStr));
+  std::unique_ptr<llvm::MemoryBuffer> Buffer =
+      FileMgr.getBufferForFile(ASTFileName, &ErrStr);
   if (!Buffer) {
     Diags.Report(diag::err_fe_unable_to_read_pch_file) << ASTFileName << ErrStr;
     return std::string();
@@ -4120,8 +4119,8 @@ bool ASTReader::readASTFileControlBlock(StringRef Filename,
                                         ASTReaderListener &Listener) {
   // Open the AST file.
   std::string ErrStr;
-  std::unique_ptr<llvm::MemoryBuffer> Buffer;
-  Buffer.reset(FileMgr.getBufferForFile(Filename, &ErrStr));
+  std::unique_ptr<llvm::MemoryBuffer> Buffer =
+      FileMgr.getBufferForFile(Filename, &ErrStr);
   if (!Buffer) {
     return true;
   }
@@ -8209,24 +8208,25 @@ void ASTReader::finishPendingActions() {
   // Objective-C protocol definitions, or any redeclarable templates, make sure
   // that all redeclarations point to the definitions. Note that this can only 
   // happen now, after the redeclaration chains have been fully wired.
-  for (llvm::SmallPtrSet<Decl *, 4>::iterator D = PendingDefinitions.begin(),
-                                           DEnd = PendingDefinitions.end();
-       D != DEnd; ++D) {
-    if (TagDecl *TD = dyn_cast<TagDecl>(*D)) {
+  for (Decl *D : PendingDefinitions) {
+    if (TagDecl *TD = dyn_cast<TagDecl>(D)) {
       if (const TagType *TagT = dyn_cast<TagType>(TD->getTypeForDecl())) {
         // Make sure that the TagType points at the definition.
         const_cast<TagType*>(TagT)->decl = TD;
       }
       
-      if (auto RD = dyn_cast<CXXRecordDecl>(*D)) {
-        for (auto R : RD->redecls())
+      if (auto RD = dyn_cast<CXXRecordDecl>(D)) {
+        for (auto R : RD->redecls()) {
+          assert((R == D) == R->isThisDeclarationADefinition() &&
+                 "declaration thinks it's the definition but it isn't");
           cast<CXXRecordDecl>(R)->DefinitionData = RD->DefinitionData;
+        }
       }
 
       continue;
     }
     
-    if (auto ID = dyn_cast<ObjCInterfaceDecl>(*D)) {
+    if (auto ID = dyn_cast<ObjCInterfaceDecl>(D)) {
       // Make sure that the ObjCInterfaceType points at the definition.
       const_cast<ObjCInterfaceType *>(cast<ObjCInterfaceType>(ID->TypeForDecl))
         ->Decl = ID;
@@ -8237,14 +8237,14 @@ void ASTReader::finishPendingActions() {
       continue;
     }
     
-    if (auto PD = dyn_cast<ObjCProtocolDecl>(*D)) {
+    if (auto PD = dyn_cast<ObjCProtocolDecl>(D)) {
       for (auto R : PD->redecls())
         R->Data = PD->Data;
       
       continue;
     }
     
-    auto RTD = cast<RedeclarableTemplateDecl>(*D)->getCanonicalDecl();
+    auto RTD = cast<RedeclarableTemplateDecl>(D)->getCanonicalDecl();
     for (auto R : RTD->redecls())
       R->Common = RTD->Common;
   }
@@ -8332,7 +8332,10 @@ void ASTReader::diagnoseOdrViolations() {
     }
 
     if (!Found) {
-      D->setInvalidDecl();
+      // The AST doesn't like TagDecls becoming invalid after they've been
+      // completed. We only really need to mark FieldDecls as invalid here.
+      if (!isa<TagDecl>(D))
+        D->setInvalidDecl();
 
       std::string CanonDefModule =
           getOwningModuleNameForDiagnostic(cast<Decl>(CanonDef));

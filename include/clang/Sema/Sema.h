@@ -129,7 +129,6 @@ namespace clang {
   class ModuleLoader;
   class MultiLevelTemplateArgumentList;
   class NamedDecl;
-  class NonNullAttr;
   class ObjCCategoryDecl;
   class ObjCCategoryImplDecl;
   class ObjCCompatibleAliasDecl;
@@ -2707,6 +2706,9 @@ public:
 
   void checkUnusedDeclAttributes(Declarator &D);
 
+  /// Determine if type T is a valid subject for a nonnull attribute.
+  bool isValidNonNullAttrType(QualType T);
+
   bool CheckRegparmAttr(const AttributeList &attr, unsigned &value);
   bool CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC, 
                             const FunctionDecl *FD = nullptr);
@@ -3317,7 +3319,8 @@ public:
   // needs to be delayed for some constant variables when we build one of the
   // named expressions.
   void MarkAnyDeclReferenced(SourceLocation Loc, Decl *D, bool OdrUse);
-  void MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func);
+  void MarkFunctionReferenced(SourceLocation Loc, FunctionDecl *Func,
+                              bool OdrUse = true);
   void MarkVariableReferenced(SourceLocation Loc, VarDecl *Var);
   void MarkDeclRefReferenced(DeclRefExpr *E);
   void MarkMemberReferenced(MemberExpr *E);
@@ -8073,6 +8076,7 @@ public:
                                  ObjCMethodDecl *Method, bool isClassMessage,
                                  bool isSuperMessage,
                                  SourceLocation lbrac, SourceLocation rbrac,
+                                 SourceRange RecRange,
                                  QualType &ReturnType, ExprValueKind &VK);
 
   /// \brief Determine the result of a message send expression based on

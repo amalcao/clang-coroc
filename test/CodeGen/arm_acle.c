@@ -62,6 +62,24 @@ void test_sevl(void) {
   __sevl();
 }
 
+#if __ARM_32BIT_STATE
+// AArch32-LABEL: test_dbg
+// AArch32: call void @llvm.arm.dbg(i32 0)
+void test_dbg(void) {
+  __dbg(0);
+}
+#endif
+
+/* 8.5 Swap */
+// ARM-LABEL: test_swp
+// AArch32: call i32 @llvm.arm.ldrex
+// AArch32: call i32 @llvm.arm.strex
+// AArch64: call i64 @llvm.aarch64.ldxr
+// AArch64: call i32 @llvm.aarch64.stxr
+uint32_t test_swp(uint32_t x, volatile void *p) {
+  __swp(x, p);
+}
+
 /* 8.6 Memory prefetch intrinsics */
 /* 8.6.1 Data prefetch */
 // ARM-LABEL: test_pld

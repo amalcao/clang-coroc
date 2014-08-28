@@ -183,6 +183,14 @@ void Sema::InstantiateAttrs(const MultiLevelTemplateArgumentList &TemplateArgs,
       continue;
     }
 
+    // Existing DLL attribute on the instantiation takes precedence.
+    if (TmplAttr->getKind() == attr::DLLExport ||
+        TmplAttr->getKind() == attr::DLLImport) {
+      if (New->hasAttr<DLLExportAttr>() || New->hasAttr<DLLImportAttr>()) {
+        continue;
+      }
+    }
+
     assert(!TmplAttr->isPackExpansion());
     if (TmplAttr->isLateParsed() && LateAttrs) {
       // Late parsed attributes must be instantiated and attached after the
@@ -355,6 +363,7 @@ TemplateDeclInstantiator::VisitTypeAliasTemplateDecl(TypeAliasTemplateDecl *D) {
   TypeAliasTemplateDecl *Inst
     = TypeAliasTemplateDecl::Create(SemaRef.Context, Owner, D->getLocation(),
                                     D->getDeclName(), InstParams, AliasInst);
+  AliasInst->setDescribedAliasTemplate(Inst);
   if (PrevAliasTemplate)
     Inst->setPreviousDecl(PrevAliasTemplate);
 

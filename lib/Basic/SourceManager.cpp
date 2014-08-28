@@ -96,9 +96,9 @@ llvm::MemoryBuffer *ContentCache::getBuffer(DiagnosticsEngine &Diag,
 
   std::string ErrorStr;
   bool isVolatile = SM.userFilesAreVolatile() && !IsSystemFile;
-  Buffer.setPointer(SM.getFileManager().getBufferForFile(ContentsEntry,
-                                                         &ErrorStr,
-                                                         isVolatile));
+  Buffer.setPointer(SM.getFileManager()
+                        .getBufferForFile(ContentsEntry, &ErrorStr, isVolatile)
+                        .release());
 
   // If we were unable to open the file, then we are in an inconsistent
   // situation where the content cache referenced a file which no longer
@@ -112,8 +112,8 @@ llvm::MemoryBuffer *ContentCache::getBuffer(DiagnosticsEngine &Diag,
   // possible.
   if (!Buffer.getPointer()) {
     const StringRef FillStr("<<<MISSING SOURCE FILE>>>\n");
-    Buffer.setPointer(MemoryBuffer::getNewMemBuffer(ContentsEntry->getSize(), 
-                                                    "<invalid>"));
+    Buffer.setPointer(MemoryBuffer::getNewMemBuffer(ContentsEntry->getSize(),
+                                                    "<invalid>").release());
     char *Ptr = const_cast<char*>(Buffer.getPointer()->getBufferStart());
     for (unsigned i = 0, e = ContentsEntry->getSize(); i != e; ++i)
       Ptr[i] = FillStr[i % FillStr.size()];
@@ -501,8 +501,8 @@ SourceManager::AllocateLoadedSLocEntries(unsigned NumSLocEntries,
 /// fake, non-empty buffer.
 llvm::MemoryBuffer *SourceManager::getFakeBufferForRecovery() const {
   if (!FakeBufferForRecovery)
-    FakeBufferForRecovery.reset(
-        llvm::MemoryBuffer::getMemBuffer("<<<INVALID BUFFER>>"));
+    FakeBufferForRecovery =
+        llvm::MemoryBuffer::getMemBuffer("<<<INVALID BUFFER>>");
 
   return FakeBufferForRecovery.get();
 }

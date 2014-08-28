@@ -754,7 +754,6 @@ public:
 
   /// \brief Set the file ID for the main source file.
   void setMainFileID(FileID FID) {
-    assert(MainFileID.isInvalid() && "MainFileID already set!");
     MainFileID = FID;
   }
 
@@ -833,7 +832,11 @@ public:
   /// \param DoNotFree If true, then the buffer will not be freed when the
   /// source manager is destroyed.
   void overrideFileContents(const FileEntry *SourceFile,
-                            llvm::MemoryBuffer *Buffer, bool DoNotFree = false);
+                            llvm::MemoryBuffer *Buffer, bool DoNotFree);
+  void overrideFileContents(const FileEntry *SourceFile,
+                            std::unique_ptr<llvm::MemoryBuffer> Buffer) {
+    overrideFileContents(SourceFile, Buffer.release(), /*DoNotFree*/ false);
+  }
 
   /// \brief Override the given source file with another one.
   ///

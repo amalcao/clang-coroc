@@ -425,6 +425,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.NumRegisterParameters = getLastArgIntValue(Args, OPT_mregparm, 0, Diags);
   Opts.NoGlobalMerge = Args.hasArg(OPT_mno_global_merge);
   Opts.NoExecStack = Args.hasArg(OPT_mno_exec_stack);
+  Opts.FatalWarnings = Args.hasArg(OPT_massembler_fatal_warnings);
   Opts.EnableSegmentedStacks = Args.hasArg(OPT_split_stacks);
   Opts.RelaxAll = Args.hasArg(OPT_mrelax_all);
   Opts.OmitLeafFramePointer = Args.hasArg(OPT_momit_leaf_frame_pointer);
@@ -1148,7 +1149,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   Opts.C11 = Std.isC11();
   Opts.CPlusPlus = Std.isCPlusPlus();
   Opts.CPlusPlus11 = Std.isCPlusPlus11();
-  Opts.CPlusPlus1y = Std.isCPlusPlus1y();
+  Opts.CPlusPlus14 = Std.isCPlusPlus14();
   Opts.CPlusPlus1z = Std.isCPlusPlus1z();
   Opts.Digraphs = Std.hasDigraphs();
   Opts.GNUMode = Std.isGNUMode();
@@ -1195,8 +1196,8 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
 
   Opts.DollarIdents = !Opts.AsmPreprocessor;
 
-  // C++1y onwards has sized global deallocation functions.
-  Opts.SizedDeallocation = Opts.CPlusPlus1y;
+  // C++14 onwards has sized global deallocation functions.
+  Opts.SizedDeallocation = Opts.CPlusPlus14;
 }
 
 /// Attempt to parse a visibility value out of the given argument.
@@ -1516,6 +1517,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.CurrentModule = Args.getLastArgValue(OPT_fmodule_name);
   Opts.ImplementationOfModule =
       Args.getLastArgValue(OPT_fmodule_implementation_of);
+  Opts.NativeHalfType = Opts.NativeHalfType;
+  Opts.HalfArgsAndReturns = Args.hasArg(OPT_fallow_half_arguments_and_returns);
 
   if (!Opts.CurrentModule.empty() && !Opts.ImplementationOfModule.empty() &&
       Opts.CurrentModule != Opts.ImplementationOfModule) {

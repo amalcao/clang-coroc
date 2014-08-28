@@ -1298,7 +1298,7 @@ static std::string getR600TargetGPU(const ArgList &Args) {
 }
 
 static void getSparcTargetFeatures(const ArgList &Args,
-                                   std::vector<const char *> Features) {
+                                   std::vector<const char *> &Features) {
   bool SoftFloatABI = true;
   if (Arg *A =
           Args.getLastArg(options::OPT_msoft_float, options::OPT_mhard_float)) {
@@ -1801,6 +1801,7 @@ static void getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     getPPCTargetFeatures(Args, Features);
     break;
   case llvm::Triple::sparc:
+  case llvm::Triple::sparcv9:
     getSparcTargetFeatures(Args, Features);
     break;
   case llvm::Triple::aarch64:
@@ -2042,8 +2043,7 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
         } else if (Value == "-L") {
           CmdArgs.push_back("-msave-temp-labels");
         } else if (Value == "--fatal-warnings") {
-          CmdArgs.push_back("-mllvm");
-          CmdArgs.push_back("-fatal-assembler-warnings");
+          CmdArgs.push_back("-massembler-fatal-warnings");
         } else if (Value == "--noexecstack") {
           CmdArgs.push_back("-mnoexecstack");
         } else if (Value == "-compress-debug-sections" ||
@@ -2198,8 +2198,7 @@ static void addAsanRT(const ToolChain &TC, const ArgList &Args,
                       ArgStringList &CmdArgs, bool Shared, bool IsCXX) {
   if (Shared) {
     // Link dynamic runtime if necessary.
-    SmallString<128> LibSanitizer =
-        getSanitizerRTLibName(TC, "asan", Shared);
+    SmallString<128> LibSanitizer = getSanitizerRTLibName(TC, "asan", Shared);
     CmdArgs.insert(CmdArgs.begin(), Args.MakeArgString(LibSanitizer));
   }
 
@@ -3718,6 +3717,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     StringRef alignment = Args.getLastArgValue(options::OPT_mstack_alignment);
     CmdArgs.push_back(Args.MakeArgString("-mstack-alignment=" + alignment));
   }
+
+  if (getToolChain().getTriple().getArch() == llvm::Triple::aarch64 ||
+      getToolChain().getTriple().getArch() == llvm::Triple::aarch64_be)
+    CmdArgs.push_back("-fallow-half-arguments-and-returns");
 
   if (Arg *A = Args.getLastArg(options::OPT_mrestrict_it,
                                options::OPT_mno_restrict_it)) {
@@ -7823,7 +7826,10 @@ void visualstudio::Link::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString("-debug"));
     CmdArgs.push_back(Args.MakeArgString("-incremental:no"));
     // FIXME: Handle 64-bit.
-    if (DLL) {
+    if (Args.hasArg(options::OPT__SLASH_MD, options::OPT__SLASH_MDd)) {
+      addSanitizerRTWindows(getToolChain(), Args, CmdArgs, "asan_dynamic-i386");
+      addSanitizerRTWindows(getToolChain(), Args, CmdArgs, "asan_uar_thunk-i386");
+    } else if (DLL) {
       addSanitizerRTWindows(getToolChain(), Args, CmdArgs,
                             "asan_dll_thunk-i386");
     } else {

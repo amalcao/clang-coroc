@@ -203,6 +203,8 @@ void ASTDeclWriter::VisitTranslationUnitDecl(TranslationUnitDecl *D) {
 void ASTDeclWriter::VisitNamedDecl(NamedDecl *D) {
   VisitDecl(D);
   Writer.AddDeclarationName(D->getDeclName(), Record);
+  if (needsAnonymousDeclarationNumber(D))
+    Record.push_back(Writer.getAnonymousDeclarationNumber(D));
 }
 
 void ASTDeclWriter::VisitTypeDecl(TypeDecl *D) {
@@ -228,6 +230,7 @@ void ASTDeclWriter::VisitTypedefDecl(TypedefDecl *D) {
       !D->isInvalidDecl() &&
       !D->isTopLevelDeclInObjCContainer() &&
       !D->isModulePrivate() &&
+      !needsAnonymousDeclarationNumber(D) &&
       D->getDeclName().getNameKind() == DeclarationName::Identifier)
     AbbrevToUse = Writer.getDeclTypedefAbbrev();
 
@@ -236,6 +239,7 @@ void ASTDeclWriter::VisitTypedefDecl(TypedefDecl *D) {
 
 void ASTDeclWriter::VisitTypeAliasDecl(TypeAliasDecl *D) {
   VisitTypedefNameDecl(D);
+  Writer.AddDeclRef(D->getDescribedAliasTemplate(), Record);
   Code = serialization::DECL_TYPEALIAS;
 }
 
@@ -244,7 +248,8 @@ void ASTDeclWriter::VisitTagDecl(TagDecl *D) {
   VisitTypeDecl(D);
   Record.push_back(D->getIdentifierNamespace());
   Record.push_back((unsigned)D->getTagKind()); // FIXME: stable encoding
-  Record.push_back(D->isCompleteDefinition());
+  if (!isa<CXXRecordDecl>(D))
+    Record.push_back(D->isCompleteDefinition());
   Record.push_back(D->isEmbeddedInDeclarator());
   Record.push_back(D->isFreeStanding());
   Record.push_back(D->isCompleteDefinitionRequired());
@@ -290,6 +295,7 @@ void ASTDeclWriter::VisitEnumDecl(EnumDecl *D) {
       !CXXRecordDecl::classofKind(D->getKind()) &&
       !D->getIntegerTypeSourceInfo() &&
       !D->getMemberSpecializationInfo() &&
+      !needsAnonymousDeclarationNumber(D) &&
       D->getDeclName().getNameKind() == DeclarationName::Identifier)
     AbbrevToUse = Writer.getDeclEnumAbbrev();
 
@@ -314,6 +320,7 @@ void ASTDeclWriter::VisitRecordDecl(RecordDecl *D) {
       D->getAccess() == AS_none &&
       !D->isModulePrivate() &&
       !CXXRecordDecl::classofKind(D->getKind()) &&
+      !needsAnonymousDeclarationNumber(D) &&
       D->getDeclName().getNameKind() == DeclarationName::Identifier)
     AbbrevToUse = Writer.getDeclRecordAbbrev();
 
@@ -659,10 +666,16 @@ void ASTDeclWriter::VisitObjCPropertyImplDecl(ObjCPropertyImplDecl *D) {
 void ASTDeclWriter::VisitFieldDecl(FieldDecl *D) {
   VisitDeclaratorDecl(D);
   Record.push_back(D->isMutable());
-  if (D->InitializerOrBitWidth.getInt() != ICIS_NoInit ||
-      D->InitializerOrBitWidth.getPointer()) {
+  if ((D->InitializerOrBitWidth.getInt() != ICIS_NoInit ||
+       D->InitializerOrBitWidth.getPointer()) &&
+      !D->hasCapturedVLAType()) {
     Record.push_back(D->InitializerOrBitWidth.getInt() + 1);
-    Writer.AddStmt(D->InitializerOrBitWidth.getPointer());
+    Writer.AddStmt(static_cast<Expr *>(D->InitializerOrBitWidth.getPointer()));
+  } else if (D->hasCapturedVLAType()) {
+    Record.push_back(D->InitializerOrBitWidth.getInt() + 1);
+    Writer.AddTypeRef(
+        QualType(static_cast<Type *>(D->InitializerOrBitWidth.getPointer()), 0),
+        Record);
   } else {
     Record.push_back(0);
   }
@@ -749,6 +762,7 @@ void ASTDeclWriter::VisitVarDecl(VarDecl *D) {
       !D->isTopLevelDeclInObjCContainer() &&
       D->getAccess() == AS_none &&
       !D->isModulePrivate() &&
+      !needsAnonymousDeclarationNumber(D) &&
       D->getDeclName().getNameKind() == DeclarationName::Identifier &&
       !D->hasExtInfo() &&
       D->getFirstDecl() == D->getMostRecentDecl() &&
