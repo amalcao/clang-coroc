@@ -428,6 +428,7 @@ Decl *TemplateDeclInstantiator::VisitVarDecl(VarDecl *D,
   return Var;
 }
 
+
 Decl *TemplateDeclInstantiator::VisitAccessSpecDecl(AccessSpecDecl *D) {
   AccessSpecDecl* AD
     = AccessSpecDecl::Create(SemaRef.Context, D->getAccess(), Owner,

@@ -2348,6 +2348,32 @@ DEF_TRAVERSE_STMT(OMPTaskwaitDirective,
 DEF_TRAVERSE_STMT(OMPFlushDirective,
                   { TRY_TO(TraverseOMPExecutableDirective(S)); })
 
+// CoroC statements ..
+DEF_TRAVERSE_STMT(CoroCYieldStmt, {})
+DEF_TRAVERSE_STMT(CoroCQuitStmt, {
+    TRY_TO(TraverseStmt(S->getReturnExpr()));
+    return true; })
+
+DEF_TRAVERSE_STMT(CoroCSpawnCallExpr, {
+    TRY_TO(TraverseStmt(S->getCallExpr()));
+    return true; })
+
+DEF_TRAVERSE_STMT(CoroCMakeChanExpr, {
+    TRY_TO(TraverseType(S->getElemType()));
+    TRY_TO(TraverseStmt(S->getCapExpr()));
+    return true; })
+
+DEF_TRAVERSE_STMT(CoroCCaseStmt, {
+	TRY_TO(TraverseStmt(S->getChanOpExpr()));
+	TRY_TO(TraverseStmt(S->getBody()));
+	return true; })
+
+DEF_TRAVERSE_STMT(CoroCSelectStmt, {
+	TRY_TO(TraverseStmt(S->getBody()));
+	return true; })
+
+DEF_TRAVERSE_STMT(CoroCNullExpr, {})
+
 // OpenMP clauses.
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseOMPClause(OMPClause *C) {

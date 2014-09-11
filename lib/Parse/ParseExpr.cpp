@@ -682,6 +682,9 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     Diag(Tok, diag::warn_cxx98_compat_nullptr);
     return Actions.ActOnCXXNullPtrLiteral(ConsumeToken());
 
+  case tok::kw___CoroC_Null:
+    return Actions.ActOnCoroCNullLiteral(ConsumeToken());
+
   case tok::annot_primary_expr:
     assert(Res.get() == nullptr && "Stray primary-expression annotation?");
     Res = getExprAnnotation(Tok);
@@ -991,6 +994,9 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
   case tok::kw_float:
   case tok::kw_double:
   case tok::kw_void:
+  case tok::kw___task_t:    // FIXME
+  case tok::kw___chan_t:    // FIXME
+  case tok::kw___refcnt_t:  // FIXME
   case tok::kw_typename:
   case tok::kw_typeof:
   case tok::kw___vector: {
@@ -1150,6 +1156,68 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     cutOffParsing();
     return ExprError();
   }
+
+  // postfix-expression:
+  //    __CoroC_Spawn postfix-expression '(' [argument-expression-list]* ')'
+  case tok::kw___CoroC_Spawn: {
+    SourceLocation SpawnLoc = ConsumeToken();
+    if (!getLangOpts().CoroC) {
+      Diag(SpawnLoc, diag::err_coro_disable);
+      SkipUntil(tok::semi, StopAtSemi); // FIXME!!
+      return ExprError();
+    }
+
+    Res = ParseCastExpression(false);
+    if (Res.isInvalid()) return ExprError();
+    return Actions.ActOnCoroCSpawnCallExpr(SpawnLoc, Res.get());
+  }
+
+  // postfix-expression:
+  //    __CoroC_Chan '<' type-specifier[, assignment-expression]* '>'
+  case tok::kw___CoroC_Chan: {
+    SourceLocation ChanLoc = ConsumeToken();
+    if (!getLangOpts().CoroC) {
+      Diag(ChanLoc, diag::err_coro_disable);
+      SkipUntil(tok::semi, StopAtSemi);
+      return ExprError();
+    }
+
+    // match the '<'
+    if (ExpectAndConsume(tok::less)) {
+        SkipUntil(tok::semi, StopAtSemi);
+        return ExprError();
+    }
+
+    SourceRange TySrcRange;
+    TypeResult Ty = ParseTypeName(&TySrcRange);
+    ExprResult Expr;
+    
+    // try to match ','
+    tok::TokenKind T = Tok.getKind();
+
+    if (T == tok::comma) {
+       ConsumeToken();
+       /* Expr = ParseCastExpression(false); // FIXME!! */
+       bool Backup = GreaterThanIsOperator;
+       GreaterThanIsOperator = false;
+       Expr = ParseExpression(MaybeTypeCast);
+       GreaterThanIsOperator = Backup;
+       if (Expr.isInvalid()) return ExprError();
+    }
+    
+    // match '>'
+    if (Tok.getKind() != tok::greater) {
+        ExpectAndConsume(tok::greater);
+        SkipUntil(tok::semi, StopAtSemi);
+        return ExprError();
+    }
+
+    return Actions.ActOnCoroCMakeChanExpr(ChanLoc, 
+                                          ConsumeToken(), 
+                                          TySrcRange,
+                                          Ty.get(), Expr.get());
+  }
+
   case tok::l_square:
     if (getLangOpts().CPlusPlus11) {
       if (getLangOpts().ObjC1) {

@@ -1341,6 +1341,8 @@ def rewrite_objc : Flag<["-"], "rewrite-objc">, Flags<[DriverOption,CC1Option]>,
   HelpText<"Rewrite Objective-C source to C++">, Group<Action_Group>;
 def rewrite_legacy_objc : Flag<["-"], "rewrite-legacy-objc">, Flags<[DriverOption]>,
   HelpText<"Rewrite Legacy Objective-C source to C++">;
+def rewrite_coroc : Flag<["-"], "rewrite-coroc">, Flags<[CC1Option]>,
+  HelpText<"Rewrite CoroC source to C++">, Group<Action_Group>;
 def rdynamic : Flag<["-"], "rdynamic">;
 def resource_dir : Separate<["-"], "resource-dir">,
   Flags<[DriverOption, CC1Option, HelpHidden]>,

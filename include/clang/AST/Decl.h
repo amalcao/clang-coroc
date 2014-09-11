@@ -470,11 +470,14 @@ public:
 class ValueDecl : public NamedDecl {
   void anchor() override;
   QualType DeclType;
+  QualType ChanElemType;
+  bool ChanDecl;
 
 protected:
   ValueDecl(Kind DK, DeclContext *DC, SourceLocation L,
             DeclarationName N, QualType T)
-    : NamedDecl(DK, DC, L, N), DeclType(T) {}
+    : NamedDecl(DK, DC, L, N), DeclType(T)
+	, ChanDecl(false) {}
 public:
   QualType getType() const { return DeclType; }
   void setType(QualType newType) { DeclType = newType; }
@@ -482,6 +485,14 @@ public:
   /// \brief Determine whether this symbol is weakly-imported,
   ///        or declared with the weak or weak-ref attr.
   bool isWeak() const;
+
+  /// \brief The elements' type if it is a CoroC channel.
+  QualType getChanElemType() const { return ChanElemType; }
+  void setChanElemType(QualType Ty) { ChanElemType = Ty; }
+
+  /// \brief Determine whether this decl is the CoroC channel.
+  void setChanDecl() { ChanDecl = true; }
+  bool isChanDecl() { return ChanDecl; }
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }

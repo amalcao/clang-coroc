@@ -768,6 +768,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Opts.ProgramAction = frontend::RewriteMacros; break;
     case OPT_rewrite_objc:
       Opts.ProgramAction = frontend::RewriteObjC; break;
+    case OPT_rewrite_coroc:
+      Opts.ProgramAction = frontend::RewriteCoroC; break;
     case OPT_rewrite_test:
       Opts.ProgramAction = frontend::RewriteTest; break;
     case OPT_analyze:
@@ -922,6 +924,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       .Case("objective-c++-header", IK_ObjCXX)
       .Cases("ast", "pcm", IK_AST)
       .Case("ir", IK_LLVM_IR)
+      .Case("coroc-cpp-output", IK_PreprocessedCoroC)
+      .Case("coroc", IK_CoroC)
       .Default(IK_None);
     if (DashX == IK_None)
       Diags.Report(diag::err_drv_invalid_value)
@@ -1098,6 +1102,9 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
              IK == IK_PreprocessedObjC ||
              IK == IK_PreprocessedObjCXX) {
     Opts.ObjC1 = Opts.ObjC2 = 1;
+  } else if (IK == IK_CoroC ||
+             IK == IK_PreprocessedCoroC) {
+    Opts.CoroC = 1;
   }
 
   if (LangStd == LangStandard::lang_unspecified) {
@@ -1118,6 +1125,8 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
     case IK_PreprocessedC:
     case IK_ObjC:
     case IK_PreprocessedObjC:
+    case IK_CoroC:
+    case IK_PreprocessedCoroC:
       LangStd = LangStandard::lang_gnu99;
       break;
     case IK_CXX:
@@ -1261,8 +1270,10 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
       switch (IK) {
       case IK_C:
       case IK_ObjC:
+      case IK_CoroC:
       case IK_PreprocessedC:
       case IK_PreprocessedObjC:
+      case IK_PreprocessedCoroC:
         if (!(Std.isC89() || Std.isC99()))
           Diags.Report(diag::err_drv_argument_not_allowed_with)
             << A->getAsString(Args) << "C/ObjC";
@@ -1416,6 +1427,12 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.WritableStrings = Args.hasArg(OPT_fwritable_strings);
   Opts.ConstStrings = Args.hasFlag(OPT_fconst_strings, OPT_fno_const_strings,
                                    Opts.ConstStrings);
+
+  // Check the CoroC support 
+  Opts.CoroC = Opts.CoroC || Args.hasArg(OPT_rewrite_coroc);
+  if (Opts.CoroC && (Opts.ObjC1 || Opts.ObjC2 || Opts.CPlusPlus))
+    Diags.Report(diag::err_drv_coro_not_c); //TODO
+
   if (Args.hasArg(OPT_fno_lax_vector_conversions))
     Opts.LaxVectorConversions = 0;
   if (Args.hasArg(OPT_fno_threadsafe_statics))
@@ -1726,6 +1743,7 @@ static void ParsePreprocessorOutputArgs(PreprocessorOutputOptions &Opts,
   case frontend::PluginAction:
   case frontend::PrintDeclContext:
   case frontend::RewriteObjC:
+  case frontend::RewriteCoroC:
   case frontend::RewriteTest:
   case frontend::RunAnalysis:
   case frontend::MigrateSource:

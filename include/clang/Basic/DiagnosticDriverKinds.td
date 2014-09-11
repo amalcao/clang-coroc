@@ -179,4 +179,7 @@ def err_drv_modules_validate_once_requires_timestamp : Error<
 
 def warn_drv_invoking_fallback : Warning<"falling back to %0">,
   InGroup<Fallback>;
+
+def err_drv_coro_not_c : Error<
+  "CoroC does support C language only">;
 }

@@ -907,6 +907,37 @@ void StmtProfiler::VisitAsTypeExpr(const AsTypeExpr *S) {
   VisitExpr(S);
 }
 
+// CoroC << 
+void StmtProfiler::VisitCoroCSpawnCallExpr(const CoroCSpawnCallExpr *E) {
+  VisitExpr(E);
+}
+
+void StmtProfiler::VisitCoroCMakeChanExpr(const CoroCMakeChanExpr* E) {
+  VisitExpr(E);
+}
+
+void StmtProfiler::VisitCoroCNullExpr(const CoroCNullExpr* E) {
+  VisitExpr(E);
+}
+
+void StmtProfiler::VisitCoroCYieldStmt(const CoroCYieldStmt *S) {
+  VisitStmt(S);
+}
+
+void StmtProfiler::VisitCoroCQuitStmt(const CoroCQuitStmt *S) {
+  VisitStmt(S);
+}
+
+void StmtProfiler::VisitCoroCCaseStmt(const CoroCCaseStmt *S) {
+  VisitStmt(S);
+}
+
+void StmtProfiler::VisitCoroCSelectStmt(const CoroCSelectStmt *S) {
+  VisitStmt(S);
+}
+
+// Coroc >>
+
 void StmtProfiler::VisitCXXNamedCastExpr(const CXXNamedCastExpr *S) {
   VisitExplicitCastExpr(S);
 }

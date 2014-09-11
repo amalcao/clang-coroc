@@ -93,6 +93,7 @@ void Driver::ParseDriverMode(ArrayRef<const char *> Args) {
         .Case("g++", GXXMode)
         .Case("cpp", CPPMode)
         .Case("cl",  CLMode)
+        .Case("co",  COMode)
         .Default(~0U);
 
     if (M != ~0U)
@@ -168,6 +169,7 @@ const {
              (PhaseArg = DAL.getLastArg(options::OPT_verify_pch)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_objc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_legacy_objc)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT_rewrite_coroc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__migrate)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__analyze,
                                         options::OPT__analyze_auto)) ||
@@ -1055,6 +1057,14 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
               Diag(clang::diag::warn_drv_treating_input_as_cxx)
                 << getTypeName(OldTy) << getTypeName(Ty);
           }
+
+          // If the driver is invoked as CoroC compiler (like clang-co) it
+          // should autodetect some input files as CoroC type.
+          if (IsCOMode()) {
+            Ty = (Ty == types::TY_PP_C) 
+                    ? types::TY_PP_CoroC
+                    : types::TY_CoroC;
+          }
         }
 
         // -ObjC and -ObjC++ override the default language, but only for "source
@@ -1485,6 +1495,7 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
       !C.getArgs().hasArg(options::OPT_traditional_cpp) &&
       !C.getArgs().hasArg(options::OPT_save_temps) &&
       !C.getArgs().hasArg(options::OPT_rewrite_objc) &&
+      !C.getArgs().hasArg(options::OPT_rewrite_coroc) &&
       ToolForJob->hasIntegratedCPP())
     Inputs = &(*Inputs)[0]->getInputs();
 

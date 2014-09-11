@@ -845,6 +845,8 @@ Type::ScalarTypeKind Type::getScalarTypeKind() const {
     if (BT->getKind() == BuiltinType::NullPtr) return STK_CPointer;
     if (BT->isInteger()) return STK_Integral;
     if (BT->isFloatingPoint()) return STK_Floating;
+    if (BT->getKind() == BuiltinType::TaskRef) return STK_TaskRef;
+    if (BT->getKind() == BuiltinType::ChanRef) return STK_ChanRef;
     llvm_unreachable("unknown scalar builtin type");
   } else if (isa<PointerType>(T)) {
     return STK_CPointer;
@@ -1549,6 +1551,9 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
   case OCLImage3d:        return "image3d_t";
   case OCLSampler:        return "sampler_t";
   case OCLEvent:          return "event_t";
+  case ChanRef:           return "__chan_t";
+  case TaskRef:           return "__task_t";
+  case GeneralRef:        return "__refcnt_t";
   }
   
   llvm_unreachable("Invalid builtin type.");

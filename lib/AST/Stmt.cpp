@@ -1677,4 +1677,3 @@ OMPFlushDirective *OMPFlushDirective::CreateEmpty(const ASTContext &C,
   void *Mem = C.Allocate(Size + sizeof(OMPClause *) * NumClauses);
   return new (Mem) OMPFlushDirective(NumClauses);
 }
-

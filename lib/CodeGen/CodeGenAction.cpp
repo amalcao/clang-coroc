@@ -699,6 +699,15 @@ void CodeGenAction::ExecuteAction() {
     return;
   }
 
+#if !defined(CLANG_ENABLE_COROC_CODEGEN)
+  // FIXME: The CodeGen has not been supported for CoroC now!
+  CompilerInstance &CI = getCompilerInstance();
+  if (CI.getLangOpts().CoroC) {
+    CI.getDiagnostics().Report(diag::err_fe_coro_gc_not_available);
+    return;
+  }
+#endif
+
   // Otherwise follow the normal AST path.
   this->ASTFrontendAction::ExecuteAction();
 }

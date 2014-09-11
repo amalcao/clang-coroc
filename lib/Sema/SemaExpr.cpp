@@ -4949,10 +4949,15 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
   // pointers.  Everything else should be possible.
 
   QualType SrcTy = Src.get()->getType();
+  Type::ScalarTypeKind SrcKind = SrcTy->getScalarTypeKind();
+
+  if (DestTy == Context.ChanRefTy)
+    return CK_NoOp; // FIXME
+
   if (Context.hasSameUnqualifiedType(SrcTy, DestTy))
     return CK_NoOp;
 
-  switch (Type::ScalarTypeKind SrcKind = SrcTy->getScalarTypeKind()) {
+  switch (SrcKind) {
   case Type::STK_MemberPointer:
     llvm_unreachable("member pointer type in C");
 
@@ -7491,6 +7496,112 @@ static void DiagnoseBadShiftValues(Sema& S, ExprResult &LHS, ExprResult &RHS,
     << RHS.get()->getSourceRange();
 }
 
+namespace {
+  /// The simple visitor to collect all the DeclRefExpr nodes..
+  class ChanDeclCollector : public RecursiveASTVisitor<ChanDeclCollector> {
+    std::vector<ValueDecl*> Collector;
+	ASTContext *Ctx;
+
+	bool isChanRefTy(Expr *E) {
+	  QualType Ty = E->getType().getCanonicalType();
+	  if (Ty->isArrayType()) {
+	    Ty = Ctx->getBaseElementType(Ty);
+	  } else if (Ty->isPointerType()) {
+	    Ty = Ty.getTypePtr()->getPointeeType();
+	  }
+
+	  return (Ty.getCanonicalType() == Ctx->ChanRefTy);
+	}
+
+  public:
+    ChanDeclCollector(ASTContext *C) : Ctx(C) {} 
+    bool VisitDeclRefExpr(DeclRefExpr *E) {
+	  if (isChanRefTy(E))
+	    Collector.push_back(E->getDecl());
+	  return true;
+	}
+
+	bool VisitMemberExpr(MemberExpr *E) {
+	  if (isChanRefTy(E))
+	    Collector.push_back(E->getMemberDecl());
+	  return true;
+	}
+
+	const std::vector<ValueDecl*>& GetCollector (void) const {
+	  return Collector;
+	}
+	std::vector<ValueDecl*>& GetCollector (void) {
+	  return Collector;
+	}
+  };
+}
+
+// CoroC Channel Send/Recv
+QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
+                                 SourceLocation Loc, unsigned Opc) {
+    // Get the underlying type  
+    QualType LHSTy = LHS.get()->getType().getCanonicalType();
+    QualType RHSType = RHS.get()->getType().getCanonicalType();
+
+    // Check if the operand is CoroC channel send / recv
+    if (LangOpts.CoroC && LHSTy == Context.ChanRefTy) {
+      // Simplify the RHS expr ..
+      ParenExpr *PE;
+      while ((PE = dyn_cast<ParenExpr>(RHS.get())) != nullptr) {
+        RHS = ExprResult(PE->getSubExpr());
+      }
+      bool isNil = (dyn_cast<CoroCNullExpr>(RHS.get()) != nullptr);
+
+      // Find the DeclRefExpr nodes in LHS
+	  ChanDeclCollector Visitor(&Context);
+	  Visitor.TraverseStmt(LHS.get());
+	  std::vector<ValueDecl*>& Collector = Visitor.GetCollector();
+	  assert (Collector.size() == 1); // FIXME
+      LHS.get()->setValueKind(VK_RValue); // directly change the value type
+
+      // Check if the type of RHS is equal to the channel elements' type!
+	  ValueDecl *VD = Collector[0];
+
+      if (VD->isChanDecl()) {
+        QualType LHSType = VD->getChanElemType();
+        if (LHSType.isNull() || isNil) {
+          if (!isNil && (RHSType == Context.VoidTy))
+            return InvalidOperands(Loc, LHS, RHS);
+
+          if (LHSType.isNull())
+            Diag(Loc, diag::warn_use_chan_without_typecheck)
+              << LHS.get()->getSourceRange();
+        } else {
+          // do the type checking ..
+          LHSType = Context.getCanonicalType(LHSType).getUnqualifiedType();
+          RHSType = Context.getCanonicalType(RHSType).getUnqualifiedType();
+
+          if (LHSType != RHSType) {
+            Diag(Loc, diag::err_chan_invalid_type)
+              << LHSType << RHSType 
+              << LHS.get()->getSourceRange() 
+              << RHS.get()->getSourceRange();
+            return QualType();          
+          }
+        }
+      } else {
+        return InvalidOperands(Loc, LHS, RHS);
+      }
+      
+      // FIXME: Check if the RHS is NOT a pure right-value when it is a ">>" operand 
+      if (Opc == BO_Shl || isNil || 
+          RHS.get()->isModifiableLvalue(Context, &Loc) == Expr::MLV_Valid)
+        return Context.BoolTy;
+      
+      Diag(Loc, diag::err_chan_not_lvalue)
+           << RHS.get()->getSourceRange();
+      return QualType();
+    }
+    
+    return InvalidOperands(Loc, LHS, RHS);
+}
+
+
 // C99 6.5.7
 QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
                                   SourceLocation Loc, unsigned Opc,
@@ -7501,6 +7612,10 @@ QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType())
     return CheckVectorOperands(LHS, RHS, Loc, IsCompAssign);
+
+  // Check the CoroC Chan operands
+  if (LHS.get()->getType().getCanonicalType() == Context.ChanRefTy)
+    return CheckChanOperands(LHS, RHS, Loc, Opc);
 
   // Shifts don't perform usual arithmetic conversions, they just do integer
   // promotions on each operand. C99 6.5.7p3
@@ -7522,8 +7637,9 @@ QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
 
   // C99 6.5.7p2: Each of the operands shall have integer type.
   if (!LHSType->hasIntegerRepresentation() ||
-      !RHSType->hasIntegerRepresentation())
+      !RHSType->hasIntegerRepresentation()) {
     return InvalidOperands(Loc, LHS, RHS);
+  }
 
   // C++0x: Don't allow scoped enums. FIXME: Use something better than
   // hasIntegerRepresentation() above instead of this.
@@ -8706,6 +8822,14 @@ QualType Sema::CheckAssignmentOperands(Expr *LHSExpr, ExprResult &RHS,
     return QualType();
 
   CheckForNullPointerDereference(*this, LHSExpr);
+
+  // Add the InsertLoc to SpawnExpr
+  if (getLangOpts().CoroC) {
+    CoroCSpawnCallExpr *SpawnExpr =
+      dyn_cast<CoroCSpawnCallExpr>(RHS.get());
+    if (SpawnExpr)
+      SpawnExpr->setInsertLoc(LHSExpr->getLocStart());
+  }
 
   // C99 6.5.16p3: The type of an assignment expression is the type of the
   // left operand unless the left operand has qualified type, in which case
@@ -12931,6 +13055,21 @@ ExprResult Sema::CheckBooleanCondition(Expr *E, SourceLocation Loc) {
 
     QualType T = E->getType();
     if (!T->isScalarType()) { // C99 6.8.4.1p1
+#if 0
+	  // check nonblock channel operantions in CoroC
+	  if (getLangOpts().CoroC && T == Context.VoidTy) {
+	    BinaryOperator *BO = dyn_cast<BinaryOperator>(E);
+		if (BO != nullptr) {
+		  unsigned Opc = BO->getOpcode();
+		  Expr *LHS = BO->getLHS();
+		  if ((Opc == BO_Shr || Opc == BO_Shl) && 
+		       LHS->getType() == Context.ChanRefTy) {
+		    E->setType(Context.BoolTy);
+			return E;
+		  }
+		}
+	  }
+#endif
       Diag(Loc, diag::err_typecheck_statement_requires_scalar)
         << T << E->getSourceRange();
       return ExprError();
@@ -13530,4 +13669,70 @@ Sema::ActOnObjCBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind) {
     BoolT = Context.getBOOLType();
   return new (Context)
       ObjCBoolLiteralExpr(Kind == tok::kw___objc_yes, BoolT, OpLoc);
+}
+
+/// ActOnCoroCSpawnCallExpr - Parse __CoroC_Spawn
+ExprResult
+Sema::ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E) {
+    if (FunctionScopes.size() < 1 ||
+        getCurFunction()->CompoundScopes.size() < 1) {
+      Diag(SpawnLoc, diag::err_spawn_invalid_scope);
+      return ExprError();
+    }
+    
+    // check if the E is a CallExpr
+    if (!isa<CallExpr>(E)) {
+      Diag(E->getExprLoc(), diag::err_not_a_call);
+      return ExprError();
+    }
+
+    return BuildCoroCSpawnCallExpr(SpawnLoc, E);
+}
+
+ExprResult 
+Sema::BuildCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E) {
+    // TODO
+    return new (Context) CoroCSpawnCallExpr(SpawnLoc, Context.TaskRefTy, 
+            dyn_cast<CallExpr>(E));
+}
+
+/// ActOnCoroCMakeChanExpr - Parse __CoroC_Chan
+ExprResult
+Sema::ActOnCoroCMakeChanExpr(SourceLocation ChanLoc, 
+                             SourceLocation GTLoc, 
+                             SourceRange TyRange, 
+                             ParsedType Ty, Expr *E) {
+    // check if this expr is called in a valid scope
+    if (FunctionScopes.size() < 1 ||
+        getCurFunction()->CompoundScopes.size() < 1) {
+      Diag(ChanLoc, diag::err_chan_invalid_scope);
+      return ExprError();
+    }
+
+    TypeSourceInfo *TSInfo = nullptr;
+    QualType T = GetTypeFromParser(Ty, &TSInfo);
+
+    // check if the SIZE field is valid 
+    if (E != nullptr && 
+        !(E->getType().getTypePtr()->isIntegerType())) {
+      Diag(ChanLoc, diag::err_chan_invalid_param);
+      return ExprError();
+    }
+    
+    return BuildCoroCMakeChanExpr(ChanLoc, GTLoc, TyRange, T, E);
+}
+
+ExprResult
+Sema::BuildCoroCMakeChanExpr(SourceLocation ChanLoc, 
+                             SourceLocation GTLoc, 
+                             SourceRange TyRange,
+                             QualType T, Expr *E) {
+    // TODO
+    return new (Context) CoroCMakeChanExpr(ChanLoc, GTLoc, TyRange, Context.ChanRefTy, T, E);
+}
+
+/// ActOnCoroCNullLiteral - Parse __CoroC_Null and build the Expr
+ExprResult
+Sema::ActOnCoroCNullLiteral(SourceLocation Loc) {
+  return new (Context) CoroCNullExpr(Loc, Context.VoidTy);
 }

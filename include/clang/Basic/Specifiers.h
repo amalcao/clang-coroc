@@ -63,6 +63,11 @@ namespace clang {
     TST_decltype_auto,    // C++1y decltype(auto)
     TST_unknown_anytype,  // __unknown_anytype extension
     TST_atomic,           // C11 _Atomic
+
+    TST_task_t,         // CoroC __task_t
+    TST_chan_t,         // CoroC __chan_t
+    TST_refcnt_t,       // CoroC __refcnt_t
+
     TST_error         // erroneous type
   };
   

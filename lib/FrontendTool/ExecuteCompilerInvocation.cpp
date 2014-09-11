@@ -91,6 +91,7 @@ static FrontendAction *CreateFrontendBaseAction(CompilerInstance &CI) {
 #else
   case RewriteObjC:            Action = "RewriteObjC"; break;
 #endif
+  case RewriteCoroC:           return new RewriteCoroCAction();
 #ifdef CLANG_ENABLE_ARCMT
   case MigrateSource:          return new arcmt::MigrateSourceAction();
 #else

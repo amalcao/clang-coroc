@@ -1655,6 +1655,38 @@ void ASTStmtReader::VisitAsTypeExpr(AsTypeExpr *E) {
   E->SrcExpr = Reader.ReadSubExpr();
 }
 
+
+//===----------------------------------------------------------------------===//
+// CoroC Expressions and Statements.
+//===----------------------------------------------------------------------===//
+void ASTStmtReader::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
+    llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
+    llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCNullExpr(CoroCNullExpr *E) {
+    llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
+    llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
+    llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCCaseStmt(CoroCCaseStmt *S) {
+	llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
+	llvm_unreachable("not implemented yet");
+}
+
 //===----------------------------------------------------------------------===//
 // OpenMP Clauses.
 //===----------------------------------------------------------------------===//
@@ -2805,6 +2837,28 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
                                          NumArrayIndexVars);
       break;
     }
+
+    // for CoroC ..
+    case STMT_COROC_YIELD:
+        S = new (Context) CoroCYieldStmt(Empty);
+        break;
+
+    case STMT_COROC_QUIT:
+        S = new (Context) CoroCQuitStmt(Empty);
+        break;
+
+	case STMT_COROC_CASE:
+		S = new (Context) CoroCCaseStmt(Empty);
+		break;
+
+	case STMT_COROC_SELECT:
+		S = new (Context) CoroCSelectStmt(Empty);
+		break;
+
+    case EXPR_COROC_SPAWN:
+    case EXPR_COROC_CHAN:
+        llvm_unreachable("not implemented yet");
+        break;
     }
     
     // We hit a STMT_STOP, so we're done with this expression.

@@ -26,6 +26,8 @@ InputKind FrontendOptions::getInputKindForExtension(StringRef Extension) {
     .Cases("cpp", "CPP", "c++", "cxx", "hpp", IK_CXX)
     .Case("cl", IK_OpenCL)
     .Case("cu", IK_CUDA)
+    .Case("oi", IK_PreprocessedCoroC)
+    .Case("co", IK_CoroC)
     .Cases("ll", "bc", IK_LLVM_IR)
     .Default(IK_C);
 }

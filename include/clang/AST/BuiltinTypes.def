@@ -134,6 +134,14 @@ FLOATING_TYPE(Double, DoubleTy)
 FLOATING_TYPE(LongDouble, LongDoubleTy)
 
 //===- Language-specific types --------------------------------------------===//
+// This is the type of CoroC 
+// '__chan_t'
+BUILTIN_TYPE(ChanRef, ChanRefTy)
+// '__task_t'
+BUILTIN_TYPE(TaskRef, TaskRefTy)
+// '__refcnt_t'
+BUILTIN_TYPE(GeneralRef, GeneralRefTy)
+
 
 // This is the type of C++0x 'nullptr'.
 BUILTIN_TYPE(NullPtr, NullPtrTy)

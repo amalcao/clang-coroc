@@ -123,6 +123,10 @@ static bool DiagnoseUnusedComparison(Sema &S, const Expr *E) {
   SourceLocation Loc;
   bool IsNotEqual, CanAssign, IsRelational;
 
+  /* we can ignore the result of __CoroC_Spawn sometimes */
+  if (dyn_cast<CoroCSpawnCallExpr>(E)) 
+    return true;
+
   if (const BinaryOperator *Op = dyn_cast<BinaryOperator>(E)) {
     if (!Op->isComparisonOp())
       return false;
@@ -2424,6 +2428,47 @@ Sema::ActOnBreakStmt(SourceLocation BreakLoc, Scope *CurScope) {
                      << "break");
 
   return new (Context) BreakStmt(BreakLoc);
+}
+
+StmtResult
+Sema::ActOnCoroCYieldStmt(SourceLocation YieldLoc) {
+  return new (Context) CoroCYieldStmt(YieldLoc);
+}
+
+StmtResult
+Sema::ActOnCoroCQuitStmt(SourceLocation QuitLoc, Expr *E) {
+  // check if the Expr E is an integar
+  if (E != nullptr) { 
+    QualType Ty = E->getType();
+    if (!Ty->isIntegerType()) 
+      return StmtError(Diag(QuitLoc, diag::err_not_quit_with_int));
+  }
+
+  return new (Context) CoroCQuitStmt(QuitLoc, E);
+}
+
+StmtResult
+Sema::ActOnCoroCCaseOrDefaultStmt(SourceLocation CaseLoc, Expr *E, Stmt *Body) {
+  if (E != nullptr) {
+    ParenExpr *P = dyn_cast<ParenExpr>(E);
+    assert (P != nullptr);
+
+    BinaryOperator *BinOp = dyn_cast<BinaryOperator>(P->getSubExpr());
+    if (BinOp == nullptr || BinOp->getLHS()->getType() != Context.ChanRefTy) 
+      return StmtError(Diag(CaseLoc, diag::err_case_op_not_chan_ops));
+  }
+
+  return new (Context) CoroCCaseStmt(E, Body, CaseLoc);
+}
+
+StmtResult
+Sema::ActOnCoroCSelectStmt(SourceLocation SelectLoc, Stmt *Body) {
+  CompoundStmt *CS = dyn_cast<CompoundStmt>(Body);
+  if (CS == nullptr || CS->size() == 0) {
+    // TODO :
+	return StmtError(Diag(Body->getLocStart(), diag::err_select_body_empty));
+  }
+  return new (Context) CoroCSelectStmt(Body, SelectLoc);
 }
 
 /// \brief Determine whether the given expression is a candidate for

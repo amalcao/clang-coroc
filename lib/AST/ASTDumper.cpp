@@ -354,6 +354,14 @@ namespace  {
     void VisitObjCIvarRefExpr(const ObjCIvarRefExpr *Node);
     void VisitObjCBoolLiteralExpr(const ObjCBoolLiteralExpr *Node);
 
+    // CoroC
+    void VisitCoroCSpawnCallExpr(const CoroCSpawnCallExpr *Node);
+    void VisitCoroCMakeChanExpr(const CoroCMakeChanExpr *Node);
+    void VisitCoroCYieldStmt(const CoroCYieldStmt *Node);
+    void VisitCoroCQuitStmt(const CoroCQuitStmt *Node);
+	void VisitCoroCCaseStmt(const CoroCCaseStmt *Node);
+	void VisitCoroCSelectStmt(const CoroCSelectStmt *Node);
+
     // Comments.
     const char *getCommandName(unsigned CommandID);
     void dumpComment(const Comment *C);
@@ -1999,6 +2007,50 @@ void ASTDumper::VisitObjCSubscriptRefExpr(const ObjCSubscriptRefExpr *Node) {
 void ASTDumper::VisitObjCBoolLiteralExpr(const ObjCBoolLiteralExpr *Node) {
   VisitExpr(Node);
   OS << " " << (Node->getValue() ? "__objc_yes" : "__objc_no");
+}
+
+
+//===----------------------------------------------------------------------===//
+// CoroC 
+//===----------------------------------------------------------------------===//
+void ASTDumper::VisitCoroCSpawnCallExpr(const CoroCSpawnCallExpr *Node) {
+  VisitExpr(Node);
+  dumpStmt(Node->getCallExpr()); // FIXME
+}
+
+void ASTDumper::VisitCoroCMakeChanExpr(const CoroCMakeChanExpr *Node) {
+  VisitExpr(Node);
+  OS << " type of elements is";
+  dumpType(Node->getElemType());
+  if (Node->getCapExpr() != nullptr) {
+    dumpStmt(Node->getCapExpr());
+  } else {
+    OS << " (no buffer)";
+  }
+}
+
+void ASTDumper::VisitCoroCYieldStmt(const CoroCYieldStmt *Node) {
+  VisitStmt(Node); // TODO
+}
+
+void ASTDumper::VisitCoroCQuitStmt(const CoroCQuitStmt *Node) {
+  VisitStmt(Node); // TODO
+  if (Node->getReturnExpr() != nullptr)
+    dumpStmt(Node->getReturnExpr());
+}
+
+void ASTDumper::VisitCoroCCaseStmt(const CoroCCaseStmt *Node) {
+  VisitStmt(Node);
+  if (Node->getChanOpExpr() != nullptr)
+    dumpStmt(Node->getChanOpExpr());
+  if (Node->getBody() != nullptr)
+    dumpStmt(Node->getBody());
+}
+
+void ASTDumper::VisitCoroCSelectStmt(const CoroCSelectStmt *Node) {
+  VisitStmt(Node);
+  if (Node->getBody() != nullptr)
+    dumpStmt(Node->getBody());
 }
 
 //===----------------------------------------------------------------------===//

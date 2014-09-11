@@ -2173,6 +2173,149 @@ public:
   friend class ASTStmtReader;
 };
 
+/// CoroCYieldStmt - This represents a __CoroC_Yield
+class CoroCYieldStmt : public Stmt {
+    SourceLocation YieldLoc;
+    
+    friend class ASTStmtReader;
+
+public:
+    explicit CoroCYieldStmt(SourceLocation SL)
+        : Stmt(CoroCYieldStmtClass), YieldLoc(SL) {}
+    explicit CoroCYieldStmt(EmptyShell E) : Stmt(CoroCYieldStmtClass, E) {}
+
+    SourceLocation getYieldLoc() const { return YieldLoc; }
+
+    SourceLocation getLocStart() const LLVM_READONLY { return YieldLoc; }
+    SourceLocation getLocEnd() const LLVM_READONLY { return YieldLoc; }
+
+    SourceRange getSourceRange() const LLVM_READONLY {
+        return SourceRange(YieldLoc);
+    }
+
+    static bool classof(const Stmt *T) {
+        return T->getStmtClass() == CoroCYieldStmtClass;
+    }
+    static bool classof(CoroCYieldStmt *) { return true; }
+
+    child_range children() { return child_range(); }
+};
+
+/// CoroCQuitStmt - This represents a __CoroC_Quit
+class CoroCQuitStmt : public Stmt {
+    SourceLocation QuitLoc;
+    Expr *TheExpr;
+    
+    friend class ASTStmtReader;
+
+public:
+    explicit CoroCQuitStmt(SourceLocation SL, Expr *E)
+        : Stmt(CoroCQuitStmtClass), QuitLoc(SL), TheExpr(E) {}
+    explicit CoroCQuitStmt(EmptyShell E) : Stmt(CoroCQuitStmtClass, E) {}
+
+    const Expr* getReturnExpr() const { return TheExpr; }
+    Expr* getReturnExpr() { return TheExpr; }
+    void setReturnExpr(Expr* E) { TheExpr = E; }
+
+    SourceLocation getQuitLoc() const { return QuitLoc; }
+
+    SourceLocation getLocStart() const LLVM_READONLY { return QuitLoc; }
+    SourceLocation getLocEnd() const LLVM_READONLY { return QuitLoc; }
+
+    SourceRange getSourceRange() const LLVM_READONLY {
+        return SourceRange(QuitLoc);
+    }
+
+    static bool classof(const Stmt *T) {
+        return T->getStmtClass() == CoroCQuitStmtClass;
+    }
+    static bool classof(CoroCQuitStmt *) { return true; }
+
+    child_range children() { return child_range(); }
+};
+
+/// CoroCCaseStmt - This represents a __CoroC_Case or __CoroC_Default
+class CoroCCaseStmt : public Stmt {
+  enum { OP, BODY, END_EXPR };
+  SourceLocation CaseLoc;
+  Stmt* SubExprs[END_EXPR];
+public:
+  CoroCCaseStmt(Expr *op, Stmt *body, SourceLocation CL)
+    : Stmt(CoroCCaseStmtClass), CaseLoc(CL) {
+    SubExprs[OP] = reinterpret_cast<Stmt*>(op);
+	SubExprs[BODY] = body;
+  }
+  
+  /// \brief Build an empty case statement
+  explicit CoroCCaseStmt(EmptyShell Empty) : Stmt(CoroCCaseStmtClass, Empty) { }
+  
+  bool isDefault() { return SubExprs[OP] == nullptr; }
+
+  Expr *getChanOpExpr() { return reinterpret_cast<Expr*>(SubExprs[OP]); }
+  const Expr *getChanOpExpr() const { return reinterpret_cast<Expr*>(SubExprs[OP]); }
+  void setChanOpExpr(Expr *E) { SubExprs[OP] = reinterpret_cast<Stmt*>(E); }
+
+  Stmt *getBody() { return SubExprs[BODY]; }
+  const Stmt *getBody() const { return SubExprs[BODY]; }
+  void setBody(Stmt *S) { SubExprs[BODY] = S; }
+
+  SourceLocation getCaseOrDefaultLoc() const { return CaseLoc; }
+  void setCaseOrDefaultLoc(SourceLocation L) { CaseLoc = L; }
+  
+  SourceLocation getLocStart() const LLVM_READONLY { return CaseLoc; }
+  SourceLocation getLocEnd() const LLVM_READONLY {
+    return SubExprs[BODY]->getLocEnd();
+  }
+
+  SourceRange getSourceRange() const LLVM_READONLY {
+    return SourceRange(CaseLoc);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == CoroCCaseStmtClass;
+  }
+
+  // Iterators
+  child_range children() {
+    return child_range(/*&SubExprs[0], &SubExprs[0]+END_EXPR*/);
+  }
+};
+
+/// CoroCSelectStmt - This represents a __CoroC_Select
+class CoroCSelectStmt : public Stmt {
+  Stmt* Body;
+  SourceLocation SelectLoc;
+public:
+  CoroCSelectStmt(Stmt* body, SourceLocation SL)
+  	: Stmt(CoroCSelectStmtClass), Body(body), SelectLoc(SL) { }
+   
+  /// \brief Build an empty select statement.
+  explicit CoroCSelectStmt(EmptyShell Empty) 
+  	: Stmt(CoroCSelectStmtClass, Empty) { }
+
+
+  const Stmt* getBody() const { return Body; }
+  Stmt* getBody() { return Body; }
+  void setBody(Stmt *body) { Body = body; }
+
+  SourceLocation getSelectLoc() { return SelectLoc; }
+  const SourceLocation getSelectLoc() const LLVM_READONLY { return SelectLoc; }
+  void setSelectLoc(SourceLocation L) { SelectLoc = L; }
+ 
+  SourceLocation getLocStart() const LLVM_READONLY { return SelectLoc; }
+  SourceLocation getLocEnd() const LLVM_READONLY {
+    return Body->getLocEnd();
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == CoroCSelectStmtClass;
+  }
+
+  // Iterators
+  child_range children() { return child_range(); }
+  
+};   
+
 }  // end namespace clang
 
 #endif

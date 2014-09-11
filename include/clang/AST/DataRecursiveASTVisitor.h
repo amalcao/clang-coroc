@@ -2269,6 +2269,24 @@ DEF_TRAVERSE_STMT(ObjCDictionaryLiteral, {})
 // Traverse OpenCL: AsType, Convert.
 DEF_TRAVERSE_STMT(AsTypeExpr, {})
 
+// CoroC statements and expressions
+DEF_TRAVERSE_STMT(CoroCSpawnCallExpr, { 
+    TRY_TO(TraverseStmt(S->getCallExpr())); })
+DEF_TRAVERSE_STMT(CoroCMakeChanExpr, { 
+    TRY_TO(TraverseType(S->getElemType()));
+    if (S->getCapExpr() != nullptr) { TRY_TO(TraverseStmt(S->getCapExpr())); } })
+DEF_TRAVERSE_STMT(CoroCYieldStmt, {})
+DEF_TRAVERSE_STMT(CoroCQuitStmt, {})
+
+DEF_TRAVERSE_STMT(CoroCCaseStmt, { 
+	if (S->getChanOpExpr() != nullptr) { TRY_TO(TraverseStmt(S->getChanOpExpr()));}
+	TRY_TO(TraverseStmt(S->getBody())); })
+
+DEF_TRAVERSE_STMT(CoroCSelectStmt, {
+	TRY_TO(TraverseStmt(S->getBody())); })
+
+DEF_TRAVERSE_STMT(CoroCNullExpr, {})
+
 // OpenMP directives.
 template <typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseOMPExecutableDirective(

@@ -2147,6 +2147,59 @@ void StmtPrinter::VisitAsTypeExpr(AsTypeExpr *Node) {
 }
 
 //===----------------------------------------------------------------------===//
+// for CoroC stmts and exprs 
+//===----------------------------------------------------------------------===//
+void StmtPrinter::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
+  OS << "__CoroC_Spawn ";
+  CallExpr *Call = E->getCallExpr();
+  PrintExpr(Call->getCallee());
+  OS << "(";
+  PrintCallArgs(Call);
+  OS << ")";
+}
+
+void StmtPrinter::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
+  OS << "__CoroC_Chan <";
+  E->getElemType().print(OS, Policy);
+  if (E->getCapExpr() != nullptr) {
+      OS << ", ";
+      PrintExpr(E->getCapExpr());
+  }
+  OS << ">";
+}
+
+void StmtPrinter::VisitCoroCNullExpr(CoroCNullExpr *E) {
+  OS << "__CoroC_Null";
+}
+
+void StmtPrinter::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
+  Indent() << "__CoroC_Yield;\n";
+}
+
+void StmtPrinter::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
+  Indent() << "__CoroC_Quit";
+  if (S->getReturnExpr() != nullptr)
+      PrintExpr(S->getReturnExpr());
+  OS << ";\n";
+}
+
+void StmtPrinter::VisitCoroCCaseStmt(CoroCCaseStmt *S) {
+  if (S->getChanOpExpr() == nullptr) {
+	Indent() << "__CoroC_Case (";
+	PrintExpr(S->getChanOpExpr());
+	OS << ") ";
+  } else {
+	Indent() << "__CoroC_Default ";
+  }
+  PrintStmt(S->getBody());
+}
+
+void StmtPrinter::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
+  Indent() << "__CoroC_Select ";
+  PrintStmt(S->getBody());
+}
+
+//===----------------------------------------------------------------------===//
 // Stmt method implementations
 //===----------------------------------------------------------------------===//
 

@@ -5279,6 +5279,20 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
+  QualType BaseTy = R;
+  if (R->isArrayType())
+	BaseTy = Context.getBaseElementType(R);
+  if (getLangOpts().CoroC) {
+    if (BaseTy == Context.TaskRefTy || BaseTy == Context.ChanRefTy) {
+      // The `__task_t' and `__chan_t' cannot have any specifiers!!
+      if (SC != SC_None) {
+        Diag(D.getDeclSpec().getStorageClassSpecLoc(), 
+           diag::err_typecheck_coro_sclass);
+        D.setInvalidType();
+      }
+    }
+  }
+
   if (getLangOpts().OpenCL) {
     // Set up the special work-group-local storage class for variables in the
     // OpenCL __local address space.
@@ -5318,6 +5332,7 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   VarDecl *NewVD = nullptr;
   VarTemplateDecl *NewTemplate = nullptr;
   TemplateParameterList *TemplateParams = nullptr;
+
   if (!getLangOpts().CPlusPlus) {
     NewVD = VarDecl::Create(Context, DC, D.getLocStart(),
                             D.getIdentifierLoc(), II,
@@ -5325,6 +5340,9 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   
     if (D.isInvalidType())
       NewVD->setInvalidDecl();
+	
+	// Check if it is a CoroC Chan decl
+	CheckChanDecl(NewVD, BaseTy, D.getDeclSpec());
   } else {
     bool Invalid = false;
 
@@ -8288,6 +8306,35 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
     RealDecl->setInvalidDecl();
     return;
   }
+  
+  // Check if this is a CoroC Chan Decl & Init pair
+  if (VDecl->isChanDecl()) {
+    CoroCMakeChanExpr *CE = dyn_cast<CoroCMakeChanExpr>(Init);
+    if (CE != nullptr) {
+      QualType OldType = VDecl->getChanElemType();
+      QualType NewType = CE->getElemType();
+
+      if (OldType.isNull() || OldType == Context.VoidTy) {
+        VDecl->setChanElemType(NewType);
+      } else {
+        // Check if two types are same
+        OldType = Context.getCanonicalType(OldType).getUnqualifiedType();
+        NewType = Context.getCanonicalType(NewType).getUnqualifiedType();
+        if (OldType != NewType) {
+          // TODO : Add a new diag type for this error !
+          Diag(RealDecl->getLocation(), diag::err_illegal_initializer);
+          RealDecl->setInvalidDecl();
+          return;
+        }
+      }
+    }
+  }
+
+  CoroCSpawnCallExpr *SpawnExpr = dyn_cast<CoroCSpawnCallExpr>(Init);
+  if (SpawnExpr) {
+    SpawnExpr->setInsertLoc(RealDecl->getSourceRange().getBegin());
+  }
+
   ParenListExpr *CXXDirectInit = dyn_cast<ParenListExpr>(Init);
 
   // C++11 [decl.spec.auto]p6. Deduce the type which 'auto' stands in for.
@@ -9554,6 +9601,9 @@ Decl *Sema::ActOnParamDeclarator(Scope *S, Declarator &D) {
   if (New->hasAttr<BlocksAttr>()) {
     Diag(New->getLocation(), diag::err_block_on_nonlocal);
   }
+
+  // Add the typename info into the CoroC channels' ValueDecl
+  CheckChanDecl(New, parmDeclType, DS);
   return New;
 }
 
@@ -11875,6 +11925,9 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
   } else
     Record->addDecl(NewFD);
 
+  // Check if this field decl is a CoroC channel decl
+  CheckChanDecl(NewFD, T, D.getDeclSpec());
+
   return NewFD;
 }
 
@@ -13559,4 +13612,30 @@ AvailabilityResult Sema::getCurContextAvailability() const {
     D = ID->getClassInterface();
   }
   return D->getAvailability();
+}
+
+/// \brief Check if the current ValueDecl is CoroC channel decl
+void Sema::CheckChanDecl(ValueDecl *D, QualType Ty, const DeclSpec &DS) {
+  Ty = Ty.getCanonicalType(); // get the underlying type 
+
+  if (Ty->isArrayType())
+    Ty = Context.getBaseElementType(Ty);
+  else if (Ty->isPointerType())
+    Ty = Ty->getPointeeType();
+
+  Ty = Ty.getCanonicalType();
+
+  if (!getLangOpts().CoroC || Ty != Context.ChanRefTy)
+    return;
+
+  // Mark this decl as a CoroC channel decl
+  D->setChanDecl();
+  // Set the elements' type info of this channel decl
+  TypeSourceInfo *TSInfo = nullptr;
+  ParsedType PT;
+  DS.GetChanElemType(PT);
+
+  QualType T = GetTypeFromParser(PT, &TSInfo);
+  if (!T.isNull())
+    D->setChanElemType(T);
 }

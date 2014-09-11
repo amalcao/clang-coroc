@@ -164,6 +164,12 @@ void Sema::Initialize() {
       PushOnScopeChains(Context.getUInt128Decl(), TUScope);
   }
 
+  // Initialize the '__time_t' implicity typedef for CoroC
+  if (PP.getLangOpts().CoroC) {
+    DeclarationName Time64 = &Context.Idents.get("__time_t");
+    if (IdResolver.begin(Time64) == IdResolver.end())
+      PushOnScopeChains(Context.getTime64Decl(), TUScope);
+  }
 
   // Initialize predefined Objective-C types:
   if (PP.getLangOpts().ObjC1) {
@@ -210,6 +216,15 @@ void Sema::Initialize() {
     addImplicitTypedef("sampler_t", Context.OCLSamplerTy);
     addImplicitTypedef("event_t", Context.OCLEventTy);
   }
+
+#if 0
+  // Initilization predefined CoroC types
+  if (PP.getLangOpts().CoroC) {
+    addImplicitTypedef("__chan_t", Context.ChanRefTy);
+    addImplicitTypedef("__task_t", Context.TaskRefTy);
+    addImplicitTypedef("__refcnt_t", Context.GeneralRefTy);
+  }
+#endif
 
   DeclarationName BuiltinVaList = &Context.Idents.get("__builtin_va_list");
   if (IdResolver.begin(BuiltinVaList) == IdResolver.end())

@@ -89,7 +89,9 @@ StmtResult Parser::ParseStatement(SourceLocation *TrailingElseLoc) {
 ///         'break' ';'
 ///         'return' expression[opt] ';'
 /// [GNU]   'goto' '*' expression ';'
-///
+/// [CoC]   '__CoroC_Yield' ';'
+/// [CoC]   '__CoroC_Quit' expression[opt] ';'
+/// 
 /// [OBC] objc-throw-statement:
 /// [OBC]   '@' 'throw' expression ';'
 /// [OBC]   '@' 'throw' ';'
@@ -360,6 +362,38 @@ Retry:
   case tok::annot_pragma_loop_hint:
     ProhibitAttributes(Attrs);
     return ParsePragmaLoopHint(Stmts, OnlyStatement, TrailingElseLoc, Attrs);
+
+  case tok::kw___CoroC_Select:
+  case tok::kw___CoroC_Yield:
+  case tok::kw___CoroC_Quit:
+    if (!getLangOpts().CoroC) {
+        Diag(Tok, diag::err_coro_disable);
+        SkipUntil(tok::semi);
+        return StmtError();
+    }
+
+    if (Kind == tok::kw___CoroC_Select)
+	    return ParseCoroCSelectStatement();
+	
+	if (Kind == tok::kw___CoroC_Yield) {
+        SemiError = "__CoroC_Yield";
+        Res = Actions.ActOnCoroCYieldStmt(ConsumeToken());
+    } else {
+        SourceLocation SL = ConsumeToken(); // eat the __CoroC_Quit
+        SemiError = "__CoroC_Quit";
+        ExprResult Expr;
+
+        if (Tok.isNot(tok::semi)) {
+            Expr = ParseExpression();
+            if (Expr.isInvalid()) {
+                Diag(Tok, diag::err_expected_expression);
+                SkipUntil(tok::semi);
+                return StmtError();
+            }
+        }
+        Res = Actions.ActOnCoroCQuitStmt(SL, Expr.get());
+    }
+    break;
   }
 
   // If we reached this code, the statement must end in a semicolon.
@@ -1825,6 +1859,99 @@ StmtResult Parser::ParseReturnStatement() {
     }
   }
   return Actions.ActOnReturnStmt(ReturnLoc, R.get(), getCurScope());
+}
+
+/// ParseCoroCCaseOrDefaultStatement:
+///     coroc-case-statement:
+///         "__CoroC_Case" "(" expression ")" compound-statement
+///         "__CoroC_Default" compound-statement
+StmtResult Parser::ParseCoroCCaseOrDefaultStatement() {
+  ExprResult Expr;
+  StmtResult Body;
+  Token OldTok = Tok;
+  SourceLocation Loc = ConsumeToken();
+
+  if (OldTok.is(tok::kw___CoroC_Case)) {
+    ParenParseOption Option = SimpleExpr;
+    ParsedType CastTy;
+	SourceLocation RPLoc;
+
+    // parse the channel operand
+    Expr = ParseParenExpression(Option, false, false, CastTy, RPLoc);
+	if (Expr.isInvalid()) {
+	  SkipUntil(tok::r_brace);
+	  return StmtError();
+	}
+  } else if (OldTok.isNot(tok::kw___CoroC_Default)) {
+    llvm_unreachable("CoroC Select case/default");
+  }
+  // parse the body
+  unsigned ScopeFlags = Scope::DeclScope;
+  Body = ParseCompoundStatement(ScopeFlags, false);
+  if (Body.isInvalid()) 
+    return StmtError();
+  
+  return Actions.ActOnCoroCCaseOrDefaultStmt(Loc, Expr.get(), Body.get());
+}
+
+/// ParseCoroCSelectStatement:
+///     coroc-case-list-statement:
+///         coroc-case-statement coroc-case-list-statement?
+///
+///     coroc-selection-statement:
+///         "__CoroC_Select" "{" coroc-case-list-statement "}"
+StmtResult Parser::ParseCoroCSelectStatement() {
+  assert(Tok.is(tok::kw___CoroC_Select) && "Not a select stmt!");
+  SourceLocation Loc = ConsumeToken(); // eat '__CoroC_Select'
+
+  // parse the body
+  if (Tok.isNot(tok::l_brace)) {
+	SkipUntil(tok::semi);
+    return StmtError();
+  }
+
+  BalancedDelimiterTracker T(*this, tok::l_brace);
+  if (T.consumeOpen())
+	return StmtError();
+
+  StmtVector Stmts;
+
+  // try to parse the case / default list ..
+  bool hasDefault = false;
+  while (Tok.is(tok::kw___CoroC_Case) || Tok.is(tok::kw___CoroC_Default)) {
+	if (Tok.is(tok::kw___CoroC_Default)) {
+	  if (hasDefault) {
+	    // TODO : report more default error !!
+		Diag(Tok, diag::err_select_more_default);
+	    return StmtError();
+	  } else
+	    hasDefault = true;
+	} 
+
+    StmtResult CaseStmt = ParseCoroCCaseOrDefaultStatement();
+    if (CaseStmt.isInvalid()) 
+	  return StmtError();
+
+	Stmts.push_back(CaseStmt.get());
+  }
+
+  if (T.consumeClose()) {
+    // TODO : report error message
+	return StmtError();
+  }
+
+  if (hasDefault && Stmts.size() == 1) {
+    Diag(Loc, diag::err_select_no_case);
+	return StmtError();
+  }
+
+  StmtResult Body = Actions.ActOnCompoundStmt(T.getOpenLocation(), 
+  											  T.getCloseLocation(),
+											  Stmts, false);
+  if (Body.isInvalid())
+  	return StmtError();
+  
+  return Actions.ActOnCoroCSelectStmt(Loc, Body.get());
 }
 
 StmtResult Parser::ParsePragmaLoopHint(StmtVector &Stmts, bool OnlyStatement,

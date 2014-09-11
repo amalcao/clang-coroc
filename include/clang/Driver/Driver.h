@@ -57,7 +57,8 @@ class Driver {
     GCCMode,
     GXXMode,
     CPPMode,
-    CLMode
+    CLMode,
+    COMode
   } Mode;
 
 public:
@@ -133,6 +134,9 @@ public:
 
   /// Whether the driver should follow cl.exe like behavior.
   bool IsCLMode() const { return Mode == CLMode; }
+
+  /// Whether the driver should follow CoroC behavior.
+  bool IsCOMode() const { return Mode == COMode; }
 
   /// Only print tool bindings, don't build any jobs.
   unsigned CCCPrintBindings : 1;

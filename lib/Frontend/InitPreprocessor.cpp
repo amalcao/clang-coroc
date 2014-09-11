@@ -851,6 +851,11 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
                         "__attribute__((objc_ownership(none)))");
   }
 
+  // CoroC definition
+  if (LangOpts.CoroC) {
+    Builder.defineMacro("__COROC__", "1.0");
+  }
+
   // OpenMP definition
   if (LangOpts.OpenMP) {
     // OpenMP 2.2:

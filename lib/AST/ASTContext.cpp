@@ -895,6 +895,12 @@ TypedefDecl *ASTContext::buildImplicitTypedef(QualType T,
   return NewDecl;
 }
 
+TypedefDecl *ASTContext::getTime64Decl() const {
+  if (!Time64Decl)
+    Time64Decl = buildImplicitTypedef(UnsignedLongLongTy, "__time_t");
+  return Time64Decl;
+}
+
 TypedefDecl *ASTContext::getInt128Decl() const {
   if (!Int128Decl)
     Int128Decl = buildImplicitTypedef(Int128Ty, "__int128_t");
@@ -1034,6 +1040,13 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target) {
 
     InitBuiltinType(OCLSamplerTy, BuiltinType::OCLSampler);
     InitBuiltinType(OCLEventTy, BuiltinType::OCLEvent);
+  }
+
+  // CoroC builtin types.
+  if (LangOpts.CoroC) {
+    InitBuiltinType(GeneralRefTy, BuiltinType::GeneralRef);
+    InitBuiltinType(TaskRefTy, BuiltinType::TaskRef);
+    InitBuiltinType(ChanRefTy, BuiltinType::ChanRef);
   }
   
   // Builtin type for __objc_yes and __objc_no
@@ -1590,6 +1603,12 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getIntWidth();
       Align = Target->getIntAlign();
       break;
+	
+	case BuiltinType::ChanRef:
+	case BuiltinType::TaskRef:
+	case BuiltinType::GeneralRef:
+	  // The Refs in CoroC should be treated as a pointer
+
     case BuiltinType::OCLEvent:
     case BuiltinType::OCLImage1d:
     case BuiltinType::OCLImage1dArray:
@@ -7505,6 +7524,18 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
   // Read the base type.
   switch (*Str++) {
   default: llvm_unreachable("Unknown builtin type letter!");
+  // for CoroC built types
+  case 't':
+    assert(HowLong == 0 && !Signed && !Unsigned &&
+           "Bad modifiers used with 't'!");
+    Type = Context.TaskRefTy;
+    break;
+  case 'r':
+    assert(HowLong == 0 && !Signed && !Unsigned &&
+           "Bad modifiers used with 'r'!");
+    Type = Context.ChanRefTy;
+    break;
+
   case 'v':
     assert(HowLong == 0 && !Signed && !Unsigned &&
            "Bad modifiers used with 'v'!");

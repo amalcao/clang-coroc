@@ -7212,4 +7212,40 @@ def warn_profile_data_unprofiled : Warning<
 
 } // end of instrumentation issue category
 
+// CoroC warnings and errors
+// __CoroC_Spawn
+def err_not_a_call : Error<
+  "the argument to __CoroC_Spawn must be a function call">;
+def err_spawn_invalid_scope : Error<
+  "__CoroC_Spawn not allowed in this scope">;
+def err_cannot_spawn_builtin: Error<
+  "builtin function cannot be spawned">;
+
+// __CoroC_Chan
+def err_chan_invalid_scope : Error<
+    "__CoroC_Chan not allowed in this scope">;
+def err_chan_invalid_param : Error<
+    "the second param of __CoroC_Chan must be an integar typed expr">;
+def err_chan_invalid_type : Error<
+    "the expected type is %0, but the given operand's type is %1">;
+def err_chan_not_lvalue : Error<
+    "the 2nd operand of the chan recv op must be a lvalue">;
+def err_chan_not_init : Error<
+    "the chan elements' type must be specified before using">;
+    
+def warn_use_chan_without_typecheck : Warning<
+    "using a chan without a elements' type declaration">;
+
+// __CoroC_Yield
+//  TODO
+
+// __CoroC_Quit
+def err_not_quit_with_int : Error<
+    "__CoroC_Quit must follow an expression with integer type">;
+
+// __CoroC_Select
+def err_case_op_not_chan_ops : Error<
+	"the expr of __CoroC_Case must be a channel operation">;
+def err_select_body_empty : Error<
+	"the body of __CoroC_Select cannot be empty">;
 } // end of sema component.
