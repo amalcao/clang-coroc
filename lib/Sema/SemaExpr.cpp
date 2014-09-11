@@ -4588,23 +4588,6 @@ Sema::ActOnCallExpr(Scope *S, Expr *Fn, SourceLocation LParenLoc,
                                ExecConfig, IsExecConfig);
 }
 
-ExprResult
-Sema::ActOnCUDAExecConfigExpr(Scope *S, SourceLocation LLLLoc,
-                              MultiExprArg ExecConfig, SourceLocation GGGLoc) {
-  FunctionDecl *ConfigDecl = Context.getcudaConfigureCallDecl();
-  if (!ConfigDecl)
-    return ExprError(Diag(LLLLoc, diag::err_undeclared_var_use)
-                          << "cudaConfigureCall");
-  QualType ConfigQTy = ConfigDecl->getType();
-
-  DeclRefExpr *ConfigDR = new (Context) DeclRefExpr(
-      ConfigDecl, false, ConfigQTy, VK_LValue, LLLLoc);
-  MarkFunctionReferenced(LLLLoc, ConfigDecl);
-
-  return ActOnCallExpr(S, ConfigDR, LLLLoc, ExecConfig, GGGLoc, nullptr,
-                       /*IsExecConfig=*/true);
-}
-
 /// ActOnAsTypeExpr - create a new asType (bitcast) from the arguments.
 ///
 /// __builtin_astype( value, dst type )
@@ -11135,7 +11118,7 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
 
   PartialDiagnostic FDiag = PDiag(DiagKind);
   if (Action == AA_Passing_CFAudited)
-    FDiag << FirstType << SecondType << SrcExpr->getSourceRange();
+    FDiag << FirstType << SecondType << AA_Passing << SrcExpr->getSourceRange();
   else
     FDiag << FirstType << SecondType << Action << SrcExpr->getSourceRange();
 

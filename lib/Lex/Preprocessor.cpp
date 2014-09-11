@@ -151,8 +151,7 @@ Preprocessor::~Preprocessor() {
   // Free any cached macro expanders.
   // This populates MacroArgCache, so all TokenLexers need to be destroyed
   // before the code below that frees up the MacroArgCache list.
-  for (unsigned i = 0, e = NumCachedTokenLexers; i != e; ++i)
-    delete TokenLexerCache[i];
+  std::fill(TokenLexerCache, TokenLexerCache + NumCachedTokenLexers, nullptr);
   CurTokenLexer.reset();
 
   while (DeserializedMacroInfoChain *I = DeserialMIChainHead) {
@@ -173,8 +172,6 @@ Preprocessor::~Preprocessor() {
   // Delete the header search info, if we own it.
   if (OwnsHeaderSearch)
     delete &HeaderInfo;
-
-  delete Callbacks;
 }
 
 void Preprocessor::Initialize(const TargetInfo &Target) {
@@ -506,7 +503,7 @@ void Preprocessor::EnterMainSourceFile() {
   std::unique_ptr<llvm::MemoryBuffer> SB =
     llvm::MemoryBuffer::getMemBufferCopy(Predefines, "<built-in>");
   assert(SB && "Cannot create predefined source buffer");
-  FileID FID = SourceMgr.createFileID(SB.release());
+  FileID FID = SourceMgr.createFileID(std::move(SB));
   assert(!FID.isInvalid() && "Could not create FileID for predefines?");
   setPredefinesFileID(FID);
 
@@ -854,5 +851,5 @@ void Preprocessor::createPreprocessingRecord() {
     return;
   
   Record = new PreprocessingRecord(getSourceManager());
-  addPPCallbacks(Record);
+  addPPCallbacks(std::unique_ptr<PPCallbacks>(Record));
 }

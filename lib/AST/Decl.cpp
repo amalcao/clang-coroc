@@ -38,6 +38,11 @@ Decl *clang::getPrimaryMergedDecl(Decl *D) {
   return D->getASTContext().getPrimaryMergedDecl(D);
 }
 
+// Defined here so that it can be inlined into its direct callers.
+bool Decl::isOutOfLine() const {
+  return !getLexicalDeclContext()->Equals(getDeclContext());
+}
+
 //===----------------------------------------------------------------------===//
 // NamedDecl Implementation
 //===----------------------------------------------------------------------===//
@@ -994,6 +999,19 @@ bool NamedDecl::isLinkageValid() const {
 
   return computeLVForDecl(this, LVForLinkageOnly).getLinkage() ==
          getCachedLinkage();
+}
+
+ObjCStringFormatFamily NamedDecl::getObjCFStringFormattingFamily() const {
+  StringRef name = getName();
+  if (name.empty()) return SFF_None;
+  
+  if (name.front() == 'C')
+    if (name == "CFStringCreateWithFormat" ||
+        name == "CFStringCreateWithFormatAndArguments" ||
+        name == "CFStringAppendFormat" ||
+        name == "CFStringAppendFormatAndArguments")
+      return SFF_CFString;
+  return SFF_None;
 }
 
 Linkage NamedDecl::getLinkageInternal() const {

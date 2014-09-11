@@ -167,6 +167,8 @@ template <> struct MappingTraits<FormatStyle> {
                    Style.AllowAllParametersOfDeclarationOnNextLine);
     IO.mapOptional("AllowShortBlocksOnASingleLine",
                    Style.AllowShortBlocksOnASingleLine);
+    IO.mapOptional("AllowShortCaseLabelsOnASingleLine",
+                   Style.AllowShortCaseLabelsOnASingleLine);
     IO.mapOptional("AllowShortIfStatementsOnASingleLine",
                    Style.AllowShortIfStatementsOnASingleLine);
     IO.mapOptional("AllowShortLoopsOnASingleLine",
@@ -228,6 +230,7 @@ template <> struct MappingTraits<FormatStyle> {
     IO.mapOptional("SpaceInEmptyParentheses", Style.SpaceInEmptyParentheses);
     IO.mapOptional("SpacesInCStyleCastParentheses",
                    Style.SpacesInCStyleCastParentheses);
+    IO.mapOptional("SpaceAfterCStyleCast", Style.SpaceAfterCStyleCast);
     IO.mapOptional("SpacesInContainerLiterals",
                    Style.SpacesInContainerLiterals);
     IO.mapOptional("SpaceBeforeAssignmentOperators",
@@ -312,6 +315,7 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.AllowAllParametersOfDeclarationOnNextLine = true;
   LLVMStyle.AllowShortFunctionsOnASingleLine = FormatStyle::SFS_All;
   LLVMStyle.AllowShortBlocksOnASingleLine = false;
+  LLVMStyle.AllowShortCaseLabelsOnASingleLine = false;
   LLVMStyle.AllowShortIfStatementsOnASingleLine = false;
   LLVMStyle.AllowShortLoopsOnASingleLine = false;
   LLVMStyle.AlwaysBreakAfterDefinitionReturnType = false;
@@ -351,6 +355,7 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.SpaceInEmptyParentheses = false;
   LLVMStyle.SpacesInContainerLiterals = true;
   LLVMStyle.SpacesInCStyleCastParentheses = false;
+  LLVMStyle.SpaceAfterCStyleCast = false;
   LLVMStyle.SpaceBeforeParens = FormatStyle::SBPO_ControlStatements;
   LLVMStyle.SpaceBeforeAssignmentOperators = true;
   LLVMStyle.SpacesInAngles = false;
@@ -640,6 +645,11 @@ public:
                  ? tryMergeSimpleControlStatement(I, E, Limit)
                  : 0;
     }
+    if (TheLine->First->isOneOf(tok::kw_case, tok::kw_default)) {
+      return Style.AllowShortCaseLabelsOnASingleLine
+                 ? tryMergeShortCaseLabels(I, E, Limit)
+                 : 0;
+    }
     if (TheLine->InPPDirective &&
         (TheLine->First->HasUnescapedNewline || TheLine->First->IsFirst)) {
       return tryMergeSimplePPDirective(I, E, Limit);
@@ -690,6 +700,30 @@ private:
         I[2]->First->is(tok::kw_else))
       return 0;
     return 1;
+  }
+
+  unsigned tryMergeShortCaseLabels(
+      SmallVectorImpl<AnnotatedLine *>::const_iterator I,
+      SmallVectorImpl<AnnotatedLine *>::const_iterator E, unsigned Limit) {
+    if (Limit == 0 || I + 1 == E ||
+        I[1]->First->isOneOf(tok::kw_case, tok::kw_default))
+      return 0;
+    unsigned NumStmts = 0;
+    unsigned Length = 0;
+    for (; NumStmts < 3; ++NumStmts) {
+      if (I + 1 + NumStmts == E)
+        break;
+      const AnnotatedLine *Line = I[1 + NumStmts];
+      if (Line->First->isOneOf(tok::kw_case, tok::kw_default, tok::r_brace))
+        break;
+      if (Line->First->isOneOf(tok::kw_if, tok::kw_for, tok::kw_switch,
+                               tok::kw_while))
+        return 0;
+      Length += I[1 + NumStmts]->Last->TotalLength + 1; // 1 for the space.
+    }
+    if (NumStmts == 0 || NumStmts == 3 || Length > Limit)
+      return 0;
+    return NumStmts;
   }
 
   unsigned
@@ -1271,13 +1305,16 @@ private:
 
 class FormatTokenLexer {
 public:
-  FormatTokenLexer(Lexer &Lex, SourceManager &SourceMgr, FormatStyle &Style,
+  FormatTokenLexer(SourceManager &SourceMgr, FileID ID, FormatStyle &Style,
                    encoding::Encoding Encoding)
       : FormatTok(nullptr), IsFirstToken(true), GreaterStashed(false),
-        Column(0), TrailingWhitespace(0), Lex(Lex), SourceMgr(SourceMgr),
-        Style(Style), IdentTable(getFormattingLangOpts()), Encoding(Encoding),
+        Column(0), TrailingWhitespace(0),
+        SourceMgr(SourceMgr), ID(ID), Style(Style),
+        IdentTable(getFormattingLangOpts(Style)), Encoding(Encoding),
         FirstInLineIndex(0), FormattingDisabled(false) {
-    Lex.SetKeepWhitespaceMode(true);
+    Lex.reset(new Lexer(ID, SourceMgr.getBuffer(ID), SourceMgr,
+                        getFormattingLangOpts(Style)));
+    Lex->SetKeepWhitespaceMode(true);
 
     for (const std::string &ForEachMacro : Style.ForEachMacros)
       ForEachMacros.push_back(&IdentTable.get(ForEachMacro));
@@ -1306,9 +1343,9 @@ private:
       return;
 
     if (Style.Language == FormatStyle::LK_JavaScript) {
-      if (tryMergeEscapeSequence())
-        return;
       if (tryMergeJSRegexLiteral())
+        return;
+      if (tryMergeEscapeSequence())
         return;
 
       static tok::TokenKind JSIdentity[] = { tok::equalequal, tok::equal };
@@ -1374,9 +1411,18 @@ private:
   // "(;,{}![:?", a binary operator or 'return', as those cannot be followed by
   // a division.
   bool tryMergeJSRegexLiteral() {
-    if (Tokens.size() < 2 || Tokens.back()->isNot(tok::slash) ||
-        (Tokens[Tokens.size() - 2]->is(tok::unknown) &&
-         Tokens[Tokens.size() - 2]->TokenText == "\\"))
+    if (Tokens.size() < 2)
+      return false;
+    // If a regex literal ends in "\//", this gets represented by an unknown
+    // token "\" and a comment.
+    bool MightEndWithEscapedSlash =
+        Tokens.back()->is(tok::comment) &&
+        Tokens.back()->TokenText.startswith("//") &&
+        Tokens[Tokens.size() - 2]->TokenText == "\\";
+    if (!MightEndWithEscapedSlash &&
+        (Tokens.back()->isNot(tok::slash) ||
+         (Tokens[Tokens.size() - 2]->is(tok::unknown) &&
+          Tokens[Tokens.size() - 2]->TokenText == "\\")))
       return false;
     unsigned TokenCount = 0;
     unsigned LastColumn = Tokens.back()->OriginalColumn;
@@ -1387,6 +1433,17 @@ private:
                          tok::exclaim, tok::l_square, tok::colon, tok::comma,
                          tok::question, tok::kw_return) ||
            I[1]->isBinaryOperator())) {
+        if (MightEndWithEscapedSlash) {
+          StringRef Buffer = SourceMgr.getBufferData(ID);
+          // This regex literal ends in '\//'. Skip past the '//' of the last
+          // token and re-start lexing from there.
+          int offset =
+              SourceMgr.getFileOffset(Tokens.back()->Tok.getLocation()) + 2;
+          Lex.reset(new Lexer(SourceMgr.getLocForStartOfFile(ID),
+                              getFormattingLangOpts(Style), Buffer.begin(),
+                              Buffer.begin() + offset, Buffer.end()));
+          Lex->SetKeepWhitespaceMode(true);
+        }
         Tokens.resize(Tokens.size() - TokenCount);
         Tokens.back()->Tok.setKind(tok::unknown);
         Tokens.back()->Type = TT_RegexLiteral;
@@ -1639,8 +1696,9 @@ private:
   bool GreaterStashed;
   unsigned Column;
   unsigned TrailingWhitespace;
-  Lexer &Lex;
+  std::unique_ptr<Lexer> Lex;
   SourceManager &SourceMgr;
+  FileID ID;
   FormatStyle &Style;
   IdentifierTable IdentTable;
   encoding::Encoding Encoding;
@@ -1653,7 +1711,7 @@ private:
   bool FormattingDisabled;
 
   void readRawToken(FormatToken &Tok) {
-    Lex.LexFromRawLexer(Tok.Tok);
+    Lex->LexFromRawLexer(Tok.Tok);
     Tok.TokenText = StringRef(SourceMgr.getCharacterData(Tok.Tok.getLocation()),
                               Tok.Tok.getLength());
     // For formatting, treat unterminated string literals like normal string
@@ -1690,12 +1748,13 @@ static StringRef getLanguageName(FormatStyle::LanguageKind Language) {
 
 class Formatter : public UnwrappedLineConsumer {
 public:
-  Formatter(const FormatStyle &Style, Lexer &Lex, SourceManager &SourceMgr,
+  Formatter(const FormatStyle &Style, SourceManager &SourceMgr, FileID ID,
             const std::vector<CharSourceRange> &Ranges)
-      : Style(Style), Lex(Lex), SourceMgr(SourceMgr),
-        Whitespaces(SourceMgr, Style, inputUsesCRLF(Lex.getBuffer())),
+      : Style(Style), ID(ID), SourceMgr(SourceMgr),
+        Whitespaces(SourceMgr, Style,
+                    inputUsesCRLF(SourceMgr.getBufferData(ID))),
         Ranges(Ranges.begin(), Ranges.end()), UnwrappedLines(1),
-        Encoding(encoding::detectEncoding(Lex.getBuffer())) {
+        Encoding(encoding::detectEncoding(SourceMgr.getBufferData(ID))) {
     DEBUG(llvm::dbgs() << "File encoding: "
                        << (Encoding == encoding::Encoding_UTF8 ? "UTF8"
                                                                : "unknown")
@@ -1706,7 +1765,7 @@ public:
 
   tooling::Replacements format() {
     tooling::Replacements Result;
-    FormatTokenLexer Tokens(Lex, SourceMgr, Style, Encoding);
+    FormatTokenLexer Tokens(SourceMgr, ID, Style, Encoding);
 
     UnwrappedLineParser Parser(Style, Tokens.lex(), *this);
     bool StructuralError = Parser.parse();
@@ -1960,7 +2019,7 @@ private:
   }
 
   FormatStyle Style;
-  Lexer &Lex;
+  FileID ID;
   SourceManager &SourceMgr;
   WhitespaceManager Whitespaces;
   SmallVector<CharSourceRange, 8> Ranges;
@@ -1975,18 +2034,27 @@ private:
 tooling::Replacements reformat(const FormatStyle &Style, Lexer &Lex,
                                SourceManager &SourceMgr,
                                std::vector<CharSourceRange> Ranges) {
-  if (Style.DisableFormat) {
-    tooling::Replacements EmptyResult;
-    return EmptyResult;
-  }
+  if (Style.DisableFormat)
+    return tooling::Replacements();
+  return reformat(Style, SourceMgr,
+                  SourceMgr.getFileID(Lex.getSourceLocation()), Ranges);
+}
 
-  Formatter formatter(Style, Lex, SourceMgr, Ranges);
+tooling::Replacements reformat(const FormatStyle &Style,
+                               SourceManager &SourceMgr, FileID ID,
+                               std::vector<CharSourceRange> Ranges) {
+  if (Style.DisableFormat)
+    return tooling::Replacements();
+  Formatter formatter(Style, SourceMgr, ID, Ranges);
   return formatter.format();
 }
 
 tooling::Replacements reformat(const FormatStyle &Style, StringRef Code,
                                std::vector<tooling::Range> Ranges,
                                StringRef FileName) {
+  if (Style.DisableFormat)
+    return tooling::Replacements();
+
   FileManager Files((FileSystemOptions()));
   DiagnosticsEngine Diagnostics(
       IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs),
@@ -1999,8 +2067,6 @@ tooling::Replacements reformat(const FormatStyle &Style, StringRef Code,
   SourceMgr.overrideFileContents(Entry, std::move(Buf));
   FileID ID =
       SourceMgr.createFileID(Entry, SourceLocation(), clang::SrcMgr::C_User);
-  Lexer Lex(ID, SourceMgr.getBuffer(ID), SourceMgr,
-            getFormattingLangOpts(Style.Standard));
   SourceLocation StartOfFile = SourceMgr.getLocForStartOfFile(ID);
   std::vector<CharSourceRange> CharRanges;
   for (unsigned i = 0, e = Ranges.size(); i != e; ++i) {
@@ -2008,16 +2074,17 @@ tooling::Replacements reformat(const FormatStyle &Style, StringRef Code,
     SourceLocation End = Start.getLocWithOffset(Ranges[i].getLength());
     CharRanges.push_back(CharSourceRange::getCharRange(Start, End));
   }
-  return reformat(Style, Lex, SourceMgr, CharRanges);
+  return reformat(Style, SourceMgr, ID, CharRanges);
 }
 
-LangOptions getFormattingLangOpts(FormatStyle::LanguageStandard Standard) {
+LangOptions getFormattingLangOpts(const FormatStyle &Style) {
   LangOptions LangOpts;
   LangOpts.CPlusPlus = 1;
-  LangOpts.CPlusPlus11 = Standard == FormatStyle::LS_Cpp03 ? 0 : 1;
-  LangOpts.CPlusPlus14 = Standard == FormatStyle::LS_Cpp03 ? 0 : 1;
+  LangOpts.CPlusPlus11 = Style.Standard == FormatStyle::LS_Cpp03 ? 0 : 1;
+  LangOpts.CPlusPlus14 = Style.Standard == FormatStyle::LS_Cpp03 ? 0 : 1;
   LangOpts.LineComment = 1;
-  LangOpts.CXXOperatorNames = 1;
+  LangOpts.CXXOperatorNames =
+      Style.Language != FormatStyle::LK_JavaScript ? 1 : 0;
   LangOpts.Bool = 1;
   LangOpts.ObjC1 = 1;
   LangOpts.ObjC2 = 1;

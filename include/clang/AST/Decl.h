@@ -289,6 +289,8 @@ public:
     return const_cast<NamedDecl*>(this)->getMostRecentDecl();
   }
 
+  ObjCStringFormatFamily getObjCFStringFormattingFamily() const;
+
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classofKind(Kind K) { return K >= firstNamed && K <= lastNamed; }
 };
@@ -1662,7 +1664,7 @@ public:
   /// unnecessary AST de-serialization of the body.
   Stmt *getBody(const FunctionDecl *&Definition) const;
 
-   Stmt *getBody() const override {
+  Stmt *getBody() const override {
     const FunctionDecl* Definition;
     return getBody(Definition);
   }
