@@ -170,7 +170,7 @@ ASTConsumer *RewriteObjCAction::CreateASTConsumer(CompilerInstance &CI,
 //===----------------------------------------------------------------------===//
 // Rewrite-CoroC Actions
 //===----------------------------------------------------------------------===//
-std::unique_ptr<ASTConsumer>
+ASTConsumer*
 RewriteCoroCAction::CreateASTConsumer(CompilerInstance &CI,
 												   StringRef InFile) {
   if (raw_ostream *OS = CI.createDefaultOutputFile(false, InFile, "cc"))

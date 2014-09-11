@@ -871,11 +871,11 @@ void RewriteCoroC::HandleTranslationUnit(ASTContext &C) {
   }
 }
 
-std::unique_ptr<ASTConsumer>
+ASTConsumer*
 clang::CreateCoroCRewriter(const std::string &InFile,
                                  raw_ostream *OS,
                                  DiagnosticsEngine &Diags,
                                  const LangOptions &LOpts) {
-  return llvm::make_unique<RewriteCoroC>(InFile, OS, Diags, LOpts);
+  return new RewriteCoroC(InFile, OS, Diags, LOpts);
 }
 

@@ -65,7 +65,7 @@ protected:
 
 class RewriteCoroCAction : public ASTFrontendAction {
 protected:
-  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
+  ASTConsumer *CreateASTConsumer(CompilerInstance &CI,
                                  StringRef InFile) override;
 };
 
