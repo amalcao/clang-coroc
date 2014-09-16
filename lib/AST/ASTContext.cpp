@@ -897,7 +897,7 @@ TypedefDecl *ASTContext::buildImplicitTypedef(QualType T,
 
 TypedefDecl *ASTContext::getTime64Decl() const {
   if (!Time64Decl)
-    Time64Decl = buildImplicitTypedef(UnsignedLongLongTy, "__time_t");
+    Time64Decl = buildImplicitTypedef(UnsignedLongLongTy, "__coroc_time_t");
   return Time64Decl;
 }
 

@@ -193,7 +193,7 @@ class ASTContext : public RefCountedBase<ASTContext> {
   TemplateTemplateParmDecl *
     getCanonicalTemplateTemplateParmDecl(TemplateTemplateParmDecl *TTP) const;
 
-  /// \brief The typedef for the __time_t type for CoroC
+  /// \brief The typedef for the __coroc_time_t type for CoroC
   mutable TypedefDecl *Time64Decl;
 
   /// \brief The typedef for the __int128_t type.
