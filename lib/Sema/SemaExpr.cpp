@@ -7545,12 +7545,15 @@ QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
 
     // Check if the operand is CoroC channel send / recv
     if (LangOpts.CoroC && LHSTy == Context.ChanRefTy) {
-      // Simplify the RHS expr ..
-      ParenExpr *PE;
-      while ((PE = dyn_cast<ParenExpr>(RHS.get())) != nullptr) {
-        RHS = ExprResult(PE->getSubExpr());
+      bool isNil = false;
+      if (RHSType == Context.VoidTy) {
+        // Simplify the RHS expr ..
+        ParenExpr *PE;
+        while ((PE = dyn_cast<ParenExpr>(RHS.get())) != nullptr) {
+          RHS = ExprResult(PE->getSubExpr());
+        }
+        isNil = (dyn_cast<CoroCNullExpr>(RHS.get()) != nullptr);
       }
-      bool isNil = (dyn_cast<CoroCNullExpr>(RHS.get()) != nullptr);
 
       // Find the DeclRefExpr nodes in LHS
 	  ChanDeclCollector Visitor(&Context);

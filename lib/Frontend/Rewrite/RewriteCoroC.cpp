@@ -538,7 +538,15 @@ bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
     if (D->getNameAsString() == "main") {
       SourceLocation SL = D->getNameInfo().getLoc();
       Rewrite.ReplaceText(SL, 4, "__CoroC_UserMain");
-      hasMain = true;
+      // if the params of `main' are ignored,
+      // we must add the default ones.
+      if (D->param_size() == 0) {
+        SL = getNextTokLocStart(SL);
+        Rewrite.InsertTextAfterToken(SL, "int __argc, char **__argv");
+      }
+      // if the `main' is just a declaration but not a defination,
+      // we don't need to generate the wrapper call.
+      hasMain = D->hasBody();
     }
   }
   
@@ -655,11 +663,11 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
   
     // The second param should be a pointer for runtime calls
     // FIXME: Check if the RHS is a L-Value for address operation!!
-    if (!UsePtr) {
-      Rewrite.InsertTextAfterToken(RHS->getLocEnd(), ")");
-    } else {
+    if (UsePtr) {
       Rewrite.InsertText(RHS->getExprLoc(), "&(");
       Rewrite.InsertTextAfterToken(RHS->getLocEnd(), "))");
+    } else {
+      Rewrite.InsertTextAfterToken(RHS->getLocEnd(), ")");
     }
   }
 
