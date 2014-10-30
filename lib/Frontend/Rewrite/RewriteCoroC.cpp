@@ -234,6 +234,7 @@ class CoroCRecursiveASTVisitor
   Rewriter &Rewrite;
   ASTContext *Context;
   bool hasMain;
+  bool isSingleReturnStmt;
 
   std::vector<ThunkHelper *> ThunkPool;
   std::vector<SelectHelper *> SelStk;
@@ -248,19 +249,20 @@ class CoroCRecursiveASTVisitor
 
   QualType getBaseRefType(QualType Ty);
 
-  bool rewriteCoroCRefTy(Expr *E);
   void rewriteCoroCRefTypeName(SourceLocation, QualType);
 
   void pushSelStk(SelectHelper *Helper);
   SelectHelper *popSelStk();
 
   void emitCleanupUntil(unsigned Flags, SourceRange SR,
+                        bool emitBlock = false,
                         ValueDecl *IgnoredVD = nullptr);
   void emitCleanupWithLabel(LabelDecl *S, SourceRange SR);
 
 public:
   CoroCRecursiveASTVisitor(Rewriter &R, ASTContext *C)
-      : Rewrite(R), Context(C), hasMain(false) {}
+      : Rewrite(R), Context(C), 
+        hasMain(false), isSingleReturnStmt(false) { }
 
   ~CoroCRecursiveASTVisitor();
 
@@ -292,9 +294,12 @@ public:
   bool VisitCoroCCaseStmt(CoroCCaseStmt *S);
   bool VisitCoroCSelectStmt(CoroCSelectStmt *S);
 
+/*
   bool VisitArraySubscriptExpr(ArraySubscriptExpr *E);
   bool VisitDeclRefExpr(DeclRefExpr *E);
   bool VisitMemberExpr(MemberExpr *E);
+*/  
+  bool VisitCallExpr(CallExpr *E);
 
   Expr *VisitBinaryOperator(BinaryOperator *B);
   Expr *VisitChanOperator(BinaryOperator *B, unsigned Opc);
@@ -633,7 +638,7 @@ void ThunkHelper::dumpThunkFunc(std::ostream &OS) {
   // 4. release the _arg and quit
   if (numArgs > 0)
     OS << "free(_arg);\n\t";
-  OS << "__CoroC_Quit(0);\n}\n";
+  OS << "__CoroC_Exit(0);\n}\n";
 }
 
 /// The static item of the CoroCRecursiveASTVisitor
@@ -765,8 +770,13 @@ void CoroCRecursiveASTVisitor::TraverseStmtWithoutScope(Stmt *S) {
     return;
   }
 
-  for (Stmt **It = CS->body_begin(); It != CS->body_end(); ++It)
+  for (Stmt **It = CS->body_begin(); It != CS->body_end(); ++It) {
+    isSingleReturnStmt = isa<ReturnStmt>(*It) || 
+                         isa<CoroCQuitStmt>(*It) ||
+                         isa<CallExpr>(*It);
     TraverseStmt(*It);
+    isSingleReturnStmt = false;
+  }
 }
 
 /// The template method for all the loop stmts.
@@ -808,17 +818,15 @@ bool CoroCRecursiveASTVisitor::VisitCompoundStmt(CompoundStmt *S) {
 /// Visit the FunctionDecl, change the `main' to `__CoroC_UserMain'
 bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
   // rewrite the return type if it is a `__chan_t<T> ':
-  if (!D->isNoReturn()) {
-    bool isPointer = false;
-    QualType Ty = D->getReturnType();
-    if (Ty->isPointerType()) {
-      isPointer = true;
-      Ty = Ty.getTypePtr()->getPointeeType();
-    }
-
-    SourceLocation StartLoc = D->getReturnTypeSourceRange().getBegin();
-    rewriteCoroCRefTypeName(StartLoc, Ty);
+  bool isPointer = false;
+  QualType Ty = D->getReturnType();
+  if (Ty->isPointerType()) {
+    isPointer = true;
+    Ty = Ty.getTypePtr()->getPointeeType();
   }
+
+  SourceLocation StartLoc = D->getReturnTypeSourceRange().getBegin();
+  rewriteCoroCRefTypeName(StartLoc, Ty);
 
   // for function decleration with a name :
   if (D->getDeclName()) {
@@ -842,7 +850,7 @@ bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
     if (D->hasBody() &&
         (CS = dyn_cast<CompoundStmt>(D->getBody())) != nullptr) {
       unsigned Flags = SCOPE_FUNC | SCOPE_BLOCK;
-      if (!D->isNoReturn())
+      if (D->getReturnType() != Context->VoidTy)
         Flags |= SCOPE_FUNC_RET;
 
       ScopeHelper Scope(this, CS->getSourceRange(), Flags);
@@ -876,13 +884,14 @@ ScopeHelper *CoroCRecursiveASTVisitor::FindLabelScope(LabelDecl *S) {
 
 /// Emit the cleanup clauses until the given scope type
 void CoroCRecursiveASTVisitor::emitCleanupUntil(unsigned Flag, SourceRange SR,
-                                                ValueDecl *IgnoredVD) {
+                                                bool emitBlock, ValueDecl *IgnoredVD) {
   std::stringstream SS;
   unsigned size = ScopeStack.size();
   bool output = false;
   ScopeHelper *Scope = ScopeStack[size - 1];
 
-  SS << "{\n\t";
+  if (emitBlock)
+    SS << "{\n\t";
 
   do {
     Scope = ScopeStack[--size];
@@ -901,7 +910,8 @@ void CoroCRecursiveASTVisitor::emitCleanupUntil(unsigned Flag, SourceRange SR,
 
   // find the ';' after the given statement, and insert a '}' after it.
   SourceLocation Loc = getNextTokLocStart(SR.getEnd());
-  Rewrite.InsertTextAfterToken(Loc, "\n\t}\n\t");
+  if (emitBlock)
+    Rewrite.InsertTextAfterToken(Loc, "\n\t}\n\t");
 }
 
 /// Emit the cleanup clauses for a goto statement with given label.
@@ -979,12 +989,13 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
     DeclRefExpr *DR = dyn_cast<DeclRefExpr>(RE);
     if (DR != nullptr) {
       emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
-                       DR->getDecl());
+                       !isSingleReturnStmt, DR->getDecl());
       return true;
     }
   }
 
-  emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange());
+  emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(), 
+                  !isSingleReturnStmt);
   return true;
 }
 
@@ -1088,36 +1099,24 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   return true;
 }
 
-/// Find and fix the ChanRef & TaskRef if they are as the array elements
-bool CoroCRecursiveASTVisitor::rewriteCoroCRefTy(Expr *E) {
-#if 0
-  // Determine the type of the ref
-  QualType Ty = E->getType();
-  if (Ty == Context->TaskRefTy || Ty == Context->ChanRefTy)  {
-    if (!E->isLValue()) {
-      Rewrite.InsertText(E->getLocStart(), "*(");
-	  Rewrite.InsertTextAfterToken(E->getLocEnd(), ")");
-	}
-  }
-#endif
+/// Find and fix the CallExpr which is not return back,
+/// emit the cleanup code before it !!
+bool CoroCRecursiveASTVisitor::VisitCallExpr(CallExpr *E) {
+  FunctionDecl *FD = E->getDirectCallee();
+  if (FD == nullptr) return true;
+  
+  // if this call will not return back, emit the cleanup code
+  // for current fucntion scope.
+  if (FD->isNoReturn())
+    emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, 
+                     E->getSourceRange(), !isSingleReturnStmt);
   return true;
 }
 
-/// Find and fix the ChanRef & TaskRef if they are as the array elements
-bool CoroCRecursiveASTVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
-  return rewriteCoroCRefTy(E);
-}
 
-/// Find and fix the ChanRef & TaskRef if they are as the struct / union members
-bool CoroCRecursiveASTVisitor::VisitMemberExpr(MemberExpr *E) {
-  return rewriteCoroCRefTy(E);
-}
-
-/// Find and fix the ChanRef & TaskRef
-bool CoroCRecursiveASTVisitor::VisitDeclRefExpr(DeclRefExpr *E) {
-  return rewriteCoroCRefTy(E);
-}
-
+/// Find and fix the binary operator expression.
+/// By now, we just handle the CoroC channel operations and 
+/// assignments for CoroC auto-references.
 Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
   // Determine the type of this binary operator
   unsigned Opc = B->getOpcode();
@@ -1132,6 +1131,7 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
   }
 }
 
+/// Rewrite the assign operations for CoroC auto-reference type.
 Expr *CoroCRecursiveASTVisitor::VisitAssignmentOperator(BinaryOperator *B) {
   Expr *LHS = B->getLHS();
   Expr *RHS = B->getRHS();
@@ -1291,12 +1291,12 @@ bool CoroCRecursiveASTVisitor::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
   SourceLocation QuitLoc = GetExpansionLoc(Rewrite, S->getLocEnd());
   if (RE == nullptr) {
     Rewrite.InsertTextAfterToken(QuitLoc, "(0)");
-    emitCleanupUntil(SCOPE_FUNC, SourceRange(S->getLocStart()));
+    emitCleanupUntil(SCOPE_FUNC, SourceRange(S->getLocStart()), !isSingleReturnStmt);
   } else {
     Rewrite.InsertTextAfterToken(QuitLoc, "(");
     Rewrite.InsertTextAfterToken(RE->getLocEnd(), ")");
     SourceRange SR(S->getLocStart(), RE->getLocEnd());
-    emitCleanupUntil(SCOPE_FUNC, SR);
+    emitCleanupUntil(SCOPE_FUNC, SR, !isSingleReturnStmt);
   }
 
   return true;
