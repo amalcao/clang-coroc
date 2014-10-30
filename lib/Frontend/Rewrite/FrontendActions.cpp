@@ -173,7 +173,7 @@ ASTConsumer *RewriteObjCAction::CreateASTConsumer(CompilerInstance &CI,
 ASTConsumer*
 RewriteCoroCAction::CreateASTConsumer(CompilerInstance &CI,
 												   StringRef InFile) {
-  if (raw_ostream *OS = CI.createDefaultOutputFile(false, InFile, "cc"))
+  if (raw_ostream *OS = CI.createDefaultOutputFile(false, InFile, "c"))
     return CreateCoroCRewriter(InFile, OS,
 							   CI.getDiagnostics(), CI.getLangOpts());
   return nullptr;

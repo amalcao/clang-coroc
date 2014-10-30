@@ -4642,7 +4642,7 @@ public:
       return ChanLoc;
     }
     SourceLocation getLocEnd() const LLVM_READONLY {
-      return ChanLoc;
+      return GTLoc;
     }
 
     static bool classof(const Stmt *T) {
