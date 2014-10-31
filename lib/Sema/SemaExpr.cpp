@@ -7540,11 +7540,11 @@ namespace {
 QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
                                  SourceLocation Loc, unsigned Opc) {
     // Get the underlying type  
-    QualType LHSTy = LHS.get()->getType().getCanonicalType();
+    QualType LHSType = LHS.get()->getType().getCanonicalType();
     QualType RHSType = RHS.get()->getType().getCanonicalType();
 
     // Check if the operand is CoroC channel send / recv
-    if (LangOpts.CoroC && LHSTy == Context.ChanRefTy) {
+    if (LangOpts.CoroC && LHSType == Context.ChanRefTy) {
       bool isNil = false;
       if (RHSType == Context.VoidTy) {
         // Simplify the RHS expr ..

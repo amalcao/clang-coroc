@@ -4784,6 +4784,9 @@ Sema::ActOnTypedefDeclarator(Scope* S, Declarator& D, DeclContext* DC,
   bool Redeclaration = D.isRedeclaration();
   NamedDecl *ND = ActOnTypedefNameDecl(S, DC, NewTD, Previous, Redeclaration);
   D.setRedeclaration(Redeclaration);
+#if 0
+  CheckChanDecl(ND, TInfo->getType(), D.getDeclSpec());
+#endif
   return ND;
 }
 
@@ -10524,6 +10527,13 @@ TypedefDecl *Sema::ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
     TInfo = Context.getTrivialTypeSourceInfo(T);
   }
 
+  // FIXME: we cannot support using `typedef' to define any `__chan_t<T>'
+  //        like types right now.
+  if (getLangOpts().CoroC && T == Context.ChanRefTy) {
+    Diag(D.getIdentifierLoc(), diag::err_invalid_chan_in_typedef);
+    return nullptr;
+  }
+
   // Scope manipulation handled by caller.
   TypedefDecl *NewTD = TypedefDecl::Create(Context, CurContext,
                                            D.getLocStart(),
@@ -13615,7 +13625,7 @@ AvailabilityResult Sema::getCurContextAvailability() const {
 }
 
 /// \brief Check if the current ValueDecl is CoroC channel decl
-void Sema::CheckChanDecl(ValueDecl *D, QualType Ty, const DeclSpec &DS) {
+void Sema::CheckChanDecl(NamedDecl *D, QualType Ty, const DeclSpec &DS) {
   Ty = Ty.getCanonicalType(); // get the underlying type 
 
   if (Ty->isArrayType())

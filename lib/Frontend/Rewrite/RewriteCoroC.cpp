@@ -249,7 +249,7 @@ class CoroCRecursiveASTVisitor
 
   QualType getBaseRefType(QualType Ty);
 
-  void rewriteCoroCRefTypeName(SourceLocation, QualType);
+  void rewriteCoroCRefTypeName(SourceLocation, QualType, bool isTypedef = false);
 
   void pushSelStk(SelectHelper *Helper);
   SelectHelper *popSelStk();
@@ -273,6 +273,8 @@ public:
   bool VisitValueDecl(ValueDecl *D);
   bool VisitFunctionDecl(FunctionDecl *D);
 
+  bool VisitTypedefNameDecl(TypedefNameDecl *D);
+
   bool VisitWhileStmt(WhileStmt *S);
   bool VisitForStmt(ForStmt *S);
   bool VisitDoStmt(DoStmt *S);
@@ -294,11 +296,6 @@ public:
   bool VisitCoroCCaseStmt(CoroCCaseStmt *S);
   bool VisitCoroCSelectStmt(CoroCSelectStmt *S);
 
-/*
-  bool VisitArraySubscriptExpr(ArraySubscriptExpr *E);
-  bool VisitDeclRefExpr(DeclRefExpr *E);
-  bool VisitMemberExpr(MemberExpr *E);
-*/  
   bool VisitCallExpr(CallExpr *E);
 
   Expr *VisitBinaryOperator(BinaryOperator *B);
@@ -335,8 +332,9 @@ public:
 
   // Top Level Driver code.
   bool HandleTopLevelDecl(DeclGroupRef D) override;
-  void HandleTopLevelSingleDecl(Decl *D);
-  void HandleDeclInMainFile(Decl *D);
+  
+  void HandleTranslationUnit(ASTContext &C) override;
+
   RewriteCoroC(const std::string &inFile, raw_ostream *OS, DiagnosticsEngine &D,
                const LangOptions &LOpts);
 
@@ -345,7 +343,6 @@ public:
       delete Visitor;
   }
 
-  void HandleTranslationUnit(ASTContext &C) override;
 };
 
 /// The bitmask for Scope Types.
@@ -871,6 +868,22 @@ bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
   return true;
 }
 
+/// For rewrite the TypedefNameDecl if it include a `__chan_t<Type>'
+bool CoroCRecursiveASTVisitor::VisitTypedefNameDecl(TypedefNameDecl *D) {
+  QualType Ty = D->getUnderlyingType();
+  QualType BaseTy = getBaseRefType(Ty);
+
+  if (BaseTy == Context->ChanRefTy) {
+    TypeSourceInfo *TS = D->getTypeSourceInfo();
+    if (TS != nullptr) {
+      rewriteCoroCRefTypeName(TS->getTypeLoc().getLocStart(), BaseTy, true);
+    }
+  }
+  return true;
+}
+
+
+/// For the [LableDecl* ==> ScopeHelper*] map's operantions:
 void CoroCRecursiveASTVisitor::InsertLabelScope(LabelDecl *S) {
   ScopeHelper *CurScope = ScopeStack[ScopeStack.size() - 1];
   LabelScopeMap[S] = CurScope;
@@ -1002,7 +1015,7 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
 /// Rewrite the type name of __chan_t / __task_t, delete the attribute or add a
 /// wrapper
 void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
-                                                       QualType Ty) {
+                                                       QualType Ty, bool isTypedef) {
   Ty = Ty.getCanonicalType();
   if (Ty != Context->ChanRefTy && Ty != Context->TaskRefTy)
     return;
@@ -1017,6 +1030,12 @@ void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
     }
     Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
   }
+  // FIXME: if the current type source is from a TypedefDecl,
+  //        we must translate the `__chan_t' into `tsc_chan_t' directly,
+  //        since the `typedef X Y;' clause cannot be preprocessed in C!!
+  if (isTypedef) {
+    Rewrite.ReplaceText(StartLoc, "tsc_chan_t");
+  }
 }
 
 /// Fetch the base simple type from a given complex type.
@@ -1024,6 +1043,8 @@ void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
 ///     if the Ty is `__chan_t []', return `__chan_t';
 ///     if the Ty is `__task_t *', return `__task_t'..
 QualType CoroCRecursiveASTVisitor::getBaseRefType(QualType Ty) {
+  Ty = Ty.getCanonicalType();
+
   if (Ty->isArrayType())
     return Context->getBaseElementType(Ty);
   if (Ty->isPointerType())
@@ -1168,7 +1189,9 @@ Expr *CoroCRecursiveASTVisitor::VisitChanOperator(BinaryOperator *B,
   Expr *LHS = B->getLHS();
   Expr *RHS = B->getRHS();
 
-  if (LHS->getType() == Context->ChanRefTy) {
+  QualType LTy = LHS->getType().getCanonicalType();
+
+  if (LTy == Context->ChanRefTy) {
     // Check if we can get the address of RHS directly
     bool UsePtr;
     std::string FuncName;

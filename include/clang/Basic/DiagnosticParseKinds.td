@@ -913,6 +913,9 @@ def err_select_no_case: Error<
 def err_typecheck_coro_sclass : Error<
     "the '__chan_t' and '__task_t' cannot have any specifiers">;
 
+def err_invalid_chan_in_typedef : Error<
+    "cannot use typedef a '__chan_t<T>' like type yet">;
+
 // OpenMP support.
 def warn_pragma_omp_ignored : Warning<
   "unexpected '#pragma omp ...' in program">, InGroup<SourceUsesOpenMP>, DefaultIgnore;
