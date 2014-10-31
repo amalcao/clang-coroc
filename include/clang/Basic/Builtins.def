@@ -1174,11 +1174,13 @@ LIBBUILTIN(_Block_object_dispose, "vvC*iC", "f", "Blocks.h", ALL_LANGUAGES)
 LIBBUILTIN(__CoroC_Chan_Close, "vr", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Self, "t", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Exit, "vi", "ri", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Chan_Release, "vr", "i", "libcoroc.h", COROC_LANG)
 
 LIBBUILTIN(__CoroC_Task_Send, "btCv*z", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Task_Send_NB, "btCv*z", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Task_Recv, "bv*z", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Task_Recv_NB, "bv*z", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Task_Release, "vt", "i", "libcoroc.h", COROC_LANG)
 
 LIBBUILTIN(__CoroC_Timer_At, "rULLi", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Timer_After, "rULLi", "i", "libcoroc.h", COROC_LANG)
