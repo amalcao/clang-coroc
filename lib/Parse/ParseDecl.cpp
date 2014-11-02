@@ -2724,25 +2724,6 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       if (isInvalid)
         break;
       
-#if 0
-      // FIXME: If in CoroC, we should fetch a typedef Name's DS,
-      // and find the hidden emlement type if it's a `__chan_t'!!
-      if (getLangOpts().CoroC) {
-        // Lookup the identifier in current scope
-        LookupResult Result(Actions, Tok.getIdentifierInfo(), 
-                            Tok.getLocation(), Sema::LookupOrdinaryName);
-        Actions.LookupName(Result, getCurScope());
-
-        if (Result.getResultKind() == LookupResult::Found) {
-          NamedDecl *ND = Result.getFoundDecl();
-          if (ND != nullptr && ND->isChanDecl()) {
-            QualType ElemTy = ND->getChanElemType();
-            DS.SetChanElemType(ParsedType::make(ElemTy));
-          }
-        }
-      }
-#endif
-
       DS.SetRangeEnd(Tok.getAnnotationEndLoc());
       ConsumeToken(); // The typename
 
