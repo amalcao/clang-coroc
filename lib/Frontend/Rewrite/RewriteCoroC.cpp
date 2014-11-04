@@ -44,11 +44,30 @@ static SourceLocation GetExpansionLoc(Rewriter &Rewrite, SourceLocation Loc) {
   return Rewrite.getSourceMgr().getExpansionLoc(Loc);
 }
 
+/// \brief Check if the given type is CoroC auto-reference types.
+///        Now, only `__chan_t' and `__task_t'.
+static inline bool IsCoroCAutoRefType(ASTContext &Ctx, QualType T) {
+  return (T == Ctx.ChanRefTy || T == Ctx.TaskRefTy);
+}
+
+/// \brief Check if the given Expr is a VarRefExpr and is the CoroC 
+///        auto-reference type.
+static bool IsCoroCAutoRefExpr(ASTContext &Ctx, Expr *E, 
+                               DeclRefExpr **DE = nullptr) {
+  if (!IsCoroCAutoRefType(Ctx, E->getType())) return false;
+
+  while (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(E))
+    E = ICE->getSubExpr();
+  /* record this DeclRefExpr pointer!! */
+  if (DE) *DE = dyn_cast<DeclRefExpr>(E);
+  return isa<DeclRefExpr>(E);
+}
+
 /// \brief Get the runtime function name of the given channel operand
 static void GetChanFuncname(ASTContext &Ctx, Expr *RHS, unsigned Opc,
-                            std::string &funcName, bool &usePtr,
+                            std::string &funcName, 
+                            bool &usePtr, bool isAutoRef = false,
                             bool sel = false, bool nonBlock = false) {
-
   bool isNil = (dyn_cast<CoroCNullExpr>(RHS) != nullptr);
   funcName = sel ? "__CoroC_Select_" : "__CoroC_Chan_";
 
@@ -60,7 +79,9 @@ static void GetChanFuncname(ASTContext &Ctx, Expr *RHS, unsigned Opc,
     funcName += "Recv";
   else {
     funcName += "Send";
-    if (!usePtr)
+    if (isAutoRef)
+      funcName += "Ref";
+    else if (!usePtr)
       funcName += "Expr";
   }
 
@@ -132,6 +153,30 @@ class SelectHelper {
   bool SimpleWay;
 
   std::stringstream Prologue, Epilogue;
+  std::map<unsigned, Expr*> AutoRefMap;
+  std::vector<CoroCCaseStmt*> CaseStmtSet; 
+
+  void dumpCleanupCode(SourceLocation Loc, unsigned pos) {
+    bool generated = false;
+    std::stringstream SS;
+    std::map<unsigned, Expr*>::iterator It;
+
+    if (pos == CaseNum)
+      SS << " else { \n";
+
+    for (It = AutoRefMap.begin(); It != AutoRefMap.end(); ++It) {
+      if (It->first != pos) {
+        generated = true;
+        SS << "\n\t__refcnt_put(" 
+           << Rewrite.ConvertToString(It->second) << ");";
+      }
+    }
+    
+    if (generated) {
+      if (pos == CaseNum) SS << " }";
+      Rewrite.InsertTextAfterToken(Loc, SS.str());
+    }
+  }
 
 public:
   SelectHelper(ASTContext *Ctx, Rewriter &R, std::string UID, SourceLocation SL,
@@ -151,6 +196,20 @@ public:
 
     Rewrite.InsertTextAfterToken(StartLoc, Prologue.str());
     Rewrite.InsertTextBefore(EndLoc, Epilogue.str());
+
+    if (AutoRefMap.size() == 0) return;
+
+    // generate the cleanup code for coroc auto references
+    for (unsigned i = 0; i < CaseNum; ++i) {
+      CompoundStmt *CS = dyn_cast<CompoundStmt>(CaseStmtSet[i]->getBody());
+      assert(CS != nullptr && "the substmt of CoroCCaseStmt not a CompoundStmt");
+      dumpCleanupCode(CS->getLocStart(), i);
+    }
+
+    if (!HasDefault) {
+      CompoundStmt *CS = dyn_cast<CompoundStmt>(CaseStmtSet[CaseNum-1]->getBody());
+      dumpCleanupCode(CS->getLocEnd(), CaseNum);
+    }
   }
 
   void GenPrologueAndEpilogue() {
@@ -167,9 +226,16 @@ public:
 
   void InsertCaseInitialization(BinaryOperator *BO) {
     std::string FuncName;
+    Expr *RHS = BO->getRHS();
     bool UsePtr;
-    GetChanFuncname(*Context, BO->getRHS(), BO->getOpcode(), FuncName, UsePtr,
-                    !SimpleWay, SimpleWay);
+    bool IsAutoRef = IsCoroCAutoRefType(*Context, RHS->getType());
+
+    GetChanFuncname(*Context, RHS, BO->getOpcode(), FuncName, 
+                    UsePtr, IsAutoRef, !SimpleWay, SimpleWay);
+
+    // record the RHS if it'a coroc auto-ref and the oprand is channel send!!
+    if (IsAutoRef && BO->getOpcode() == BO_Shl)
+      AutoRefMap[CurPos] = RHS;
 
     if (SimpleWay)
       Prologue << "\n\t\tbool __select_result_" << SelUID << " = " << FuncName
@@ -189,6 +255,8 @@ public:
 
   bool RewriteCaseStmt(CoroCCaseStmt *Case) {
     std::stringstream SS;
+
+    CaseStmtSet.push_back(Case); // record this CoroCCaseStmt* !!
 
     if (CurPos == 0)
       SS << "if (";
@@ -324,6 +392,7 @@ class RewriteCoroC : public ASTConsumer {
   std::string InFileName;
   raw_ostream *OutFile;
   CoroCRecursiveASTVisitor *Visitor;
+  ScopeHelper *Global;
 
   Rewriter Rewrite;
 
@@ -339,6 +408,8 @@ public:
                const LangOptions &LOpts);
 
   ~RewriteCoroC() {
+    if (Global != nullptr)
+      delete Global;
     if (Visitor != nullptr)
       delete Visitor;
   }
@@ -429,8 +500,7 @@ class ScopeHelper {
 
     } else {
       // ignore the var not with the special types.
-      if (Ty.getCanonicalType() != Ctx->ChanRefTy &&
-          Ty.getCanonicalType() != Ctx->TaskRefTy)
+      if (!IsCoroCAutoRefType(*Ctx, Ty.getCanonicalType()))
         return;
       SS << "__refcnt_put(" << Prefix << VD->getNameAsString() << ");\n\t";
     }
@@ -531,7 +601,7 @@ void ThunkHelper::DumpThunkCallPrologue(std::ostream &OS, CallExpr *CE,
     Expr *E = *it;
     QualType Ty = E->getType();
 
-    if (Ty == Context->ChanRefTy || Ty == Context->TaskRefTy) {
+    if (IsCoroCAutoRefType(*Context, Ty)) {
       OS << "__refcnt_get(" << Rewrite.ConvertToString(E) << ")";
     } else
       OS << Rewrite.ConvertToString(E);
@@ -615,7 +685,7 @@ void ThunkHelper::dumpThunkFunc(std::ostream &OS) {
     CallExpr::arg_iterator it = TheCallExpr->arg_begin();
     for (;;) {
       QualType Ty = (*it)->getType();
-      if (Ty == Context->ChanRefTy || Ty == Context->TaskRefTy)
+      if (IsCoroCAutoRefType(*Context, Ty))
         ArgStk.push_back(i);
 
       OS << "_arg->_param" << i++;
@@ -815,12 +885,9 @@ bool CoroCRecursiveASTVisitor::VisitCompoundStmt(CompoundStmt *S) {
 /// Visit the FunctionDecl, change the `main' to `__CoroC_UserMain'
 bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
   // rewrite the return type if it is a `__chan_t<T> ':
-  bool isPointer = false;
   QualType Ty = D->getReturnType();
-  if (Ty->isPointerType()) {
-    isPointer = true;
+  if (Ty->isPointerType())
     Ty = Ty.getTypePtr()->getPointeeType();
-  }
 
   SourceLocation StartLoc = D->getReturnTypeSourceRange().getBegin();
   rewriteCoroCRefTypeName(StartLoc, Ty);
@@ -993,18 +1060,12 @@ bool CoroCRecursiveASTVisitor::VisitGotoStmt(GotoStmt *S) {
 /// Visit the ReturnStmt, emit the cleanup clauses until the current fucntion
 bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
   Expr *RE = S->getRetValue();
-  if (RE != nullptr && (RE->getType() == Context->ChanRefTy ||
-                        RE->getType() == Context->TaskRefTy)) {
-    while (ImplicitCastExpr *CE = dyn_cast<ImplicitCastExpr>(RE)) {
-      RE = CE->getSubExpr();
-    }
-
-    DeclRefExpr *DR = dyn_cast<DeclRefExpr>(RE);
-    if (DR != nullptr) {
-      emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
-                       !isSingleReturnStmt, DR->getDecl());
-      return true;
-    }
+  DeclRefExpr *DR = nullptr;
+  if (RE != nullptr && IsCoroCAutoRefExpr(*Context, RE, &DR)) {
+    assert(DR != nullptr);
+    emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
+                     !isSingleReturnStmt, DR->getDecl());
+    return true;
   }
 
   emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(), 
@@ -1017,9 +1078,9 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
 void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
                                                        QualType Ty, bool isTypedef) {
   Ty = Ty.getCanonicalType();
-  if (Ty != Context->ChanRefTy && Ty != Context->TaskRefTy)
+  if (!IsCoroCAutoRefType(*Context, Ty))
     return;
-
+ 
   // Check if the `__chan_t' with a type attribute
   Token TheTok = getNextTok(StartLoc);
   if (TheTok.getKind() == tok::less) {
@@ -1093,7 +1154,7 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   if (isa<ParmVarDecl>(D)) return true;
 
   if (!Ty->isPointerType() && 
-      (BaseTy == Context->ChanRefTy || BaseTy == Context->TaskRefTy)) {
+      IsCoroCAutoRefType(*Context, BaseTy)) {
     // Insert the reference to current scope
     InsertRefToCurScope(D);
     // If no init code, and a default to zero!
@@ -1157,19 +1218,13 @@ Expr *CoroCRecursiveASTVisitor::VisitAssignmentOperator(BinaryOperator *B) {
   Expr *LHS = B->getLHS();
   Expr *RHS = B->getRHS();
 
-  QualType Ty = LHS->getType();
-
-  if (Ty != Context->ChanRefTy && Ty != Context->TaskRefTy)
+  if (!IsCoroCAutoRefType(*Context, LHS->getType()))
     return B;
-
-  while (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(RHS)) {
-    RHS = ICE->getSubExpr();
-  }
 
   // replace the code "ref_a = ref_b;" to
   // "__refcnt_assign(ref_a, ref_b);"
   // which is a macro and can be expansioned as :
-  if (dyn_cast<DeclRefExpr>(RHS) != nullptr)
+  if (IsCoroCAutoRefExpr(*Context, RHS))
     // "({__refcnt_put(ref_a); ref_a = __refcnt_get(ref_b); ref_a})"
     Rewrite.InsertText(LHS->getLocStart(), "__refcnt_assign(", true);
   else
@@ -1193,9 +1248,11 @@ Expr *CoroCRecursiveASTVisitor::VisitChanOperator(BinaryOperator *B,
 
   if (LTy == Context->ChanRefTy) {
     // Check if we can get the address of RHS directly
-    bool UsePtr;
+    bool usePtr;
+
     std::string FuncName;
-    GetChanFuncname(*Context, RHS, Opc, FuncName, UsePtr);
+    GetChanFuncname(*Context, RHS, Opc, FuncName, 
+                    usePtr, IsCoroCAutoRefType(*Context, RHS->getType()));
 
     // Insert the function call at the start of the first expr
     FuncName += "(";
@@ -1206,7 +1263,7 @@ Expr *CoroCRecursiveASTVisitor::VisitChanOperator(BinaryOperator *B,
 
     // The second param should be a pointer for runtime calls
     // FIXME: Check if the RHS is a L-Value for address operation!!
-    if (UsePtr) {
+    if (usePtr) {
       Rewrite.InsertText(RHS->getExprLoc(), "&(");
       Rewrite.InsertTextAfterToken(RHS->getLocEnd(), "))");
     } else {
@@ -1386,8 +1443,7 @@ void RewriteCoroC::Initialize(ASTContext &C) {
   SM = &C.getSourceManager();
   Rewrite.setSourceMgr(C.getSourceManager(), C.getLangOpts());
   Visitor = new CoroCRecursiveASTVisitor(Rewrite, Context);
-  // FIXME !!
-  ScopeHelper *Global = new ScopeHelper(Visitor, SourceRange(), SCOPE_GLOBAL);
+  Global = new ScopeHelper(Visitor, SourceRange(), SCOPE_GLOBAL); // FIXME!!
 }
 
 bool RewriteCoroC::HandleTopLevelDecl(DeclGroupRef D) {

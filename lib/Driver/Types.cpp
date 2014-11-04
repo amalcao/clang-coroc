@@ -84,7 +84,7 @@ bool types::isAcceptedByClang(ID Id) {
 
   case TY_Asm:
   case TY_C: case TY_PP_C:
-  case TY_CoroC:
+  case TY_CoroC: case TY_PP_CoroC:
   case TY_CL:
   case TY_CUDA:
   case TY_ObjC: case TY_PP_ObjC: case TY_PP_ObjC_Alias:
