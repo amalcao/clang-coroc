@@ -162,7 +162,7 @@ class SelectHelper {
     std::map<unsigned, Expr*>::iterator It;
 
     if (pos == CaseNum)
-      SS << " else { \n";
+      SS << " else {";
 
     for (It = AutoRefMap.begin(); It != AutoRefMap.end(); ++It) {
       if (It->first != pos) {
@@ -173,7 +173,7 @@ class SelectHelper {
     }
     
     if (generated) {
-      if (pos == CaseNum) SS << " }";
+      if (pos == CaseNum) SS << "\n\t}";
       Rewrite.InsertTextAfterToken(Loc, SS.str());
     }
   }
@@ -317,7 +317,9 @@ class CoroCRecursiveASTVisitor
 
   QualType getBaseRefType(QualType Ty);
 
-  void rewriteCoroCRefTypeName(SourceLocation, QualType, bool isTypedef = false);
+  void rewriteCoroCRefTypeName(SourceLocation, QualType, 
+                               bool isTypedef = false, 
+                               SourceLocation *EndLoc = nullptr);
 
   void pushSelStk(SelectHelper *Helper);
   SelectHelper *popSelStk();
@@ -348,7 +350,6 @@ public:
   bool VisitDoStmt(DoStmt *S);
   bool VisitSwitchStmt(SwitchStmt *S);
   bool VisitCompoundStmt(CompoundStmt *S);
-  bool VisitDeclStmt(DeclStmt *S);
 
   bool VisitLabelStmt(LabelStmt *S);
   bool VisitBreakStmt(BreakStmt *S);
@@ -407,13 +408,7 @@ public:
   RewriteCoroC(const std::string &inFile, raw_ostream *OS, DiagnosticsEngine &D,
                const LangOptions &LOpts);
 
-  ~RewriteCoroC() {
-    if (Global != nullptr)
-      delete Global;
-    if (Visitor != nullptr)
-      delete Visitor;
-  }
-
+  ~RewriteCoroC();
 };
 
 /// The bitmask for Scope Types.
@@ -585,8 +580,6 @@ void ThunkHelper::GetStructName(std::string &structName) {
 /// Dump the thunk calling code into the OS
 void ThunkHelper::DumpThunkCallPrologue(std::ostream &OS, CallExpr *CE,
                                         std::string paramName) {
-  // If the func call without any arg, ignore it!
-  // if (CE->getNumArgs() == 0) return;
 
   OS << "\n\tstruct __thunk_struct_" << ThunkUID << "*  " << paramName << " = ("
      << "struct __thunk_struct_" << ThunkUID << "*)malloc(sizeof("
@@ -940,12 +933,10 @@ bool CoroCRecursiveASTVisitor::VisitTypedefNameDecl(TypedefNameDecl *D) {
   QualType Ty = D->getUnderlyingType();
   QualType BaseTy = getBaseRefType(Ty);
 
-  if (BaseTy == Context->ChanRefTy) {
-    TypeSourceInfo *TS = D->getTypeSourceInfo();
-    if (TS != nullptr) {
-      rewriteCoroCRefTypeName(TS->getTypeLoc().getLocStart(), BaseTy, true);
-    }
-  }
+  TypeSourceInfo *TS = D->getTypeSourceInfo();
+  if (TS != nullptr)
+    rewriteCoroCRefTypeName(TS->getTypeLoc().getLocStart(), BaseTy, true);
+  
   return true;
 }
 
@@ -1076,27 +1067,53 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
 /// Rewrite the type name of __chan_t / __task_t, delete the attribute or add a
 /// wrapper
 void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
-                                                       QualType Ty, bool isTypedef) {
+                                                       QualType Ty, bool isTypedef,
+                                                       SourceLocation *EndLoc) {                                                     
   Ty = Ty.getCanonicalType();
   if (!IsCoroCAutoRefType(*Context, Ty))
     return;
  
   // Check if the `__chan_t' with a type attribute
   Token TheTok = getNextTok(StartLoc);
+  SourceLocation Loc = TheTok.getLocation();
+  // FIXME : If more than one VarDecls share a type decl specifier,
+  //         only the first one will update the type name correctly.
+  //         This condition checks if the code has been rewritten yet, 
+  //         note the method is ugly, but works.
   if (TheTok.getKind() == tok::less) {
-    while (TheTok.getKind() != tok::greater) {
-      SourceLocation Loc = TheTok.getLocation();
+    bool rewrite = (Rewrite.getRewrittenText(Loc) == "<");
+    unsigned n = 0;
+    while (1) {
+      if (TheTok.getKind() == tok::greater) n--;
+      if (TheTok.getKind() == tok::less) n++;
+
+      // delete the current Token
+      if (rewrite)
+        Rewrite.ReplaceText(Loc, "");
+      
+      // TheTok must be a closed '>' when loop ends.
+      if (n == 0) break;
+
       TheTok = getNextTok(Loc);
-      Rewrite.ReplaceText(Loc, "");
-    }
-    Rewrite.ReplaceText(TheTok.getLocation(), ""); // delete the '>'
+      Loc = TheTok.getLocation();
+    } 
+    // return the current end of code stream!! 
+    if (EndLoc != nullptr) *EndLoc = Loc;
+  
+  } else {
+    if (EndLoc != nullptr) *EndLoc = StartLoc;
   }
+
   // FIXME: if the current type source is from a TypedefDecl,
   //        we must translate the `__chan_t' into `tsc_chan_t' directly,
   //        since the `typedef X Y;' clause cannot be preprocessed in C!!
-  if (isTypedef) {
+  if (!isTypedef) return;
+  
+  if (Ty == Context->ChanRefTy)
     Rewrite.ReplaceText(StartLoc, "tsc_chan_t");
-  }
+  else if (Ty == Context->TaskRefTy)
+    Rewrite.ReplaceText(StartLoc, "tsc_coroutine_t");
+  // TODO : other auto-reference types!!
 }
 
 /// Fetch the base simple type from a given complex type.
@@ -1105,24 +1122,21 @@ void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
 ///     if the Ty is `__task_t *', return `__task_t'..
 QualType CoroCRecursiveASTVisitor::getBaseRefType(QualType Ty) {
   Ty = Ty.getCanonicalType();
+  bool loop;
 
-  if (Ty->isArrayType())
-    return Context->getBaseElementType(Ty);
-  if (Ty->isPointerType())
-    return Ty->getPointeeType();
+  do {
+    loop = false;
+    if (Ty->isArrayType()) {
+      Ty = Context->getBaseElementType(Ty);
+      loop = true;
+    }
+    if (Ty->isPointerType()) {
+      Ty = Ty->getPointeeType();
+      loop = true;
+    }
+  } while (loop);
+
   return Ty;
-}
-
-/// Override the DeclStmt when the type is CoroC `__chan_t'
-bool CoroCRecursiveASTVisitor::VisitDeclStmt(DeclStmt *S) {
-  DeclStmt::decl_iterator I = S->decl_begin();
-  ValueDecl *VD = dyn_cast<ValueDecl>(*I);
-  // if the decl is not a `ValueDecl', just return..
-  if (VD != nullptr) {
-    QualType BaseTy = getBaseRefType(VD->getType());
-    rewriteCoroCRefTypeName(VD->getLocStart(), BaseTy);
-  }
-  return true;
 }
 
 /// Override the ValueDecl when the type is CoroC Ref
@@ -1144,10 +1158,8 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   // visiting the `DeclStmt', because if we do it here, some errors
   // will happen when the there're more than 1 `VarDecl' in a `DeclStmt'.
   // FIXME: This will cause the global vars cannot be added into any scope!!
-  if (isa<ParmVarDecl>(D) || !isa<VarDecl>(D)) {
-    SourceLocation StartLoc = D->getSourceRange().getBegin();
-    rewriteCoroCRefTypeName(StartLoc, BaseTy);
-  }
+  SourceLocation StartLoc = D->getSourceRange().getBegin();
+  rewriteCoroCRefTypeName(StartLoc, BaseTy);
 
   // NOTE: The `ParmVarDecl' will not be inserted into any scope!
   //       The caller will dec its counter when the function returns.
@@ -1344,6 +1356,8 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 bool CoroCRecursiveASTVisitor::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
   Expr *CE = E->getCapExpr();
   SourceLocation ChanLoc = GetExpansionLoc(Rewrite, E->getLocStart());
+  QualType BaseTy = getBaseRefType(E->getElemType());
+
   // Transform to runtime call:
   //  __CoroC_Chan(sizeof type, (expr));
 
@@ -1351,13 +1365,19 @@ bool CoroCRecursiveASTVisitor::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
   SourceLocation Loc = getNextTokLocStart(ChanLoc);
   Rewrite.ReplaceText(Loc, 1, "(sizeof(");
 
-  // insert '>' before the ',' or '>'
-  Token Tok;
-  do {
+  // Tok is the first token of the typename.
+  Token Tok = getNextTok(Loc); 
+  if (IsCoroCAutoRefType(*Context, BaseTy)) {
+    // replace any matched <...> with blank and return the end loc.
+    rewriteCoroCRefTypeName(Tok.getLocation(), BaseTy, false, &Loc);
+  } 
+  // try to find the ',' or '>', record the location.
+  while (Tok.isNot(tok::comma) && Tok.isNot(tok::greater)) {
     Tok = getNextTok(Loc);
     Loc = Tok.getLocation();
-  } while (Tok.isNot(tok::comma) && Tok.isNot(tok::greater));
-
+  }
+  
+  // insert ')' before the ',' or '>'
   Rewrite.InsertText(Loc, ")");
   Rewrite.ReplaceText(E->getGTLoc(), 1,
                       CE != nullptr ? ")" : ", 0)"); // replace '>' to ')'
@@ -1438,6 +1458,11 @@ RewriteCoroC::RewriteCoroC(const std::string &inFile, raw_ostream *OS,
   // TODO
 }
 
+RewriteCoroC::~RewriteCoroC() {
+  if (Global != nullptr) delete Global;
+  if (Visitor != nullptr) delete Visitor;
+}
+
 void RewriteCoroC::Initialize(ASTContext &C) {
   Context = &C;
   SM = &C.getSourceManager();
@@ -1463,7 +1488,7 @@ bool RewriteCoroC::HandleTopLevelDecl(DeclGroupRef D) {
 void RewriteCoroC::HandleTranslationUnit(ASTContext &C) {
   // print the new file buffer ..
   (*OutFile)
-      << "/* C++ source file auto generated by Clang CoroC rewriter. */\n";
+      << "/* C source file auto generated by Clang CoroC rewriter. */\n";
   (*OutFile) << "#include <libcoroc.h>\n";
 
   const RewriteBuffer *RewriteBuf =
