@@ -468,17 +468,7 @@ class ScopeHelper {
     ASTContext *Ctx = Visitor->Context;
     QualType Ty = VD->getType();
 
-    if (Ty->isArrayType()) {
-      // FIXME : only support the 1-dimensional constant-sized array now!!
-      const ConstantArrayType *ArrayTy = dyn_cast_or_null<ConstantArrayType>(
-          Ctx->getAsArrayType(Ty)); // FIXME!
-      if (ArrayTy == nullptr)
-        return; // FIXME
-
-      RH << Indentation << "__refcnt_put_array(" << Prefix 
-         << VD << ", " << ArrayTy->getSize() << ");" << Endl;
-
-    } else if (Ty->isStructureType()) {
+    if (Ty->isStructureType()) {
       // for structures with chan_t / task_t fields inside!!
       Prefix += VD->getNameAsString();
       Prefix += ".";
@@ -496,7 +486,19 @@ class ScopeHelper {
         EmitCleanupPerRef(RH, *I, Prefix, emitBlock);
       }
 
-    } else {
+    } else if (Ty->isArrayType()) {
+      // FIXME : only support the 1-dimensional constant-sized array now!!
+      if (!IsCoroCAutoRefType(*Ctx, Ctx->getBaseElementType(Ty)))
+        return;
+      const ConstantArrayType *ArrayTy = dyn_cast_or_null<ConstantArrayType>(
+          Ctx->getAsArrayType(Ty)); // FIXME!
+      if (ArrayTy == nullptr) 
+        return; // FIXME
+
+      RH << Indentation << "__refcnt_put_array(" << Prefix 
+         << VD << ", " << ArrayTy->getSize() << ");" << Endl;
+
+    } else  {
       // ignore the var not with the special types.
       if (!IsCoroCAutoRefType(*Ctx, Ty.getCanonicalType()))
         return;
@@ -1439,6 +1441,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
   SH->GenPrologueAndEpilogue();
   pushSelStk(SH);
 
+  // Remove the keyword `__CoroC_Select'.
   Rewrite.RemoveText(SourceRange(S->getSelectLoc()));
   return true;
 }
