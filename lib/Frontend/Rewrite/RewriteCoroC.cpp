@@ -495,7 +495,8 @@ class ScopeHelper {
       if (ArrayTy == nullptr) 
         return; // FIXME
 
-      RH << Indentation << "__refcnt_put_array(" << Prefix 
+      if (emitBlock) RH << Indentation;
+      RH << "__refcnt_put_array(" << Prefix 
          << VD << ", " << ArrayTy->getSize() << ");" << Endl;
 
     } else  {
