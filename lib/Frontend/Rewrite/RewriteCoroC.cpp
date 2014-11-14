@@ -173,7 +173,7 @@ class SelectHelper {
     }
     
     if (generated) {
-      if (pos == CaseNum) RH << "}" << Endl;
+      if (pos == CaseNum) RH << "}"/* << Endl*/;
       RH.InsertTextAfterToken(Loc);
     }
   }
@@ -1158,7 +1158,7 @@ void CoroCRecursiveASTVisitor::AddDefaultInit(ValueDecl *D, bool Simple) {
       Rewrite.InsertTextBefore(Init->getLocStart(), "__refcnt_get(");
       Rewrite.InsertTextAfterToken(Init->getLocEnd(), ")");
     }
-  } else {
+  } else if (!D->hasExternalFormalLinkage()) {
     // FIXME: how to handle the N-Dimensional arrays or structs?
     if (Simple)
       Rewrite.InsertTextAfterToken(D->getLocEnd(), " = NULL");

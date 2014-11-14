@@ -47,66 +47,52 @@ namespace ict {
     }
   }
 
-  template<typename T>
-  static void AddToString(std::string& str, T i) {
-    std::stringstream ss;
-    ss << i;
-    str += ss.str();
-  }
-
   /// \brief The RewriteHepler -
   class RewriteHelper {
     typedef RewriteHelper& (*RewriteHelperOperator) (RewriteHelper&);
 
     clang::Rewriter& Rewrite;
 
-    std::string *CurLine; // pointer to current line
-    std::vector<std::string*> LineSet; // store all the lines
+    const char* Indentation; // the indent str for each line
+    std::string CurLine; // pointer to current line
 
-    void clear(bool exit = false) {
-      // release the unpushed line first
-      if (exit && CurLine != nullptr)
-        delete CurLine;
+    void clear() { CurLine = ""; }
 
-      // release all lines stored in the LineSet
-      for (std::vector<std::string*>::iterator I = LineSet.begin();
-           I != LineSet.end(); ++I) delete *I;
-      LineSet.clear();
-    }
+    void dump(std::string& Output, llvm::StringRef& Indent) {
+      llvm::StringRef Str(CurLine.c_str());
 
-    void dump(std::string& Output, std::string& Indent) {
       // If the last line is end with an `Endl'
-      bool cleanInsert = true;
-      // push current line into the buffer
-      if (CurLine != nullptr && CurLine->length() > 0) {
-        cleanInsert = false;
-        LineSet.push_back(CurLine);
-        CurLine = nullptr;
-      }
-      
+      bool cleanInsert = Str.endswith("\n");
+
+      llvm::SmallVector<llvm::StringRef, 8> lines;
+      Str.split(lines, "\n");
+
       // print all the buffer into one string and then output to rewriter.
-      for (std::vector<std::string*>::iterator I = LineSet.begin();
-           I != LineSet.end(); ++I) {
+      unsigned e = lines.size();
+      if (cleanInsert) e--; // NOTE: split will add the last empty line, so we'd better ignore it!
+
+      for (unsigned i = 0; i != e; ++i) {
         // the first line will insert into the orignal position,
         // so it will share the indentation with orignal line, ignore padding..
-        if (I != LineSet.begin())
-          Output += Indent; // FIXME
-        Output += *(*I);
+        if (i != 0) Output += Indent.str();
+        Output += lines[i].str();
+        if (i < e-1) Output += "\n";
       }
 
       // add the indentation for the orignal position for Loc!!
-      if (cleanInsert) Output += Indent;
-      
+      if (cleanInsert) {
+        Output += "\n";
+        Output += Indent.str();
+      }
+
       // clear the current LineSet in order to re-use it
       clear();
-      if (CurLine == nullptr) 
-        CurLine = new std::string;
     }
     
     /// Get the indentaion (number of space) of the line 
     /// which contains the current source location (Loc).
     void getIndentaionOfLine(clang::SourceLocation Loc,
-                             std::string &Indent) {
+                             llvm::StringRef &Indent) {
       using namespace clang;
 
       SourceManager& SourceMgr = Rewrite.getSourceMgr();
@@ -129,29 +115,15 @@ namespace ict {
     }
 
   public:
-    RewriteHelper(clang::Rewriter *_Rewrite) 
-      : Rewrite(*_Rewrite), CurLine(new std::string) { }
-    ~RewriteHelper() { 
-      clear(true);
-    }
+    RewriteHelper(clang::Rewriter *_Rewrite, const char* _Indent = "  ") 
+      : Rewrite(*_Rewrite), Indentation(_Indent) { }
 
-    void endline() {
-      assert(CurLine != nullptr);
-      (*CurLine) += "\n";
-      LineSet.push_back(CurLine);
-
-      CurLine = new std::string;
-    }
-
-    unsigned getLineNum() {
-      if (CurLine && CurLine->length() > 0)
-        return LineSet.size() + 1;
-      return LineSet.size();
-    }
+    const char* getDefaultIndent() const { return Indentation; }
 
     /// Insert text before or after the given source locarion.
     bool InsertText(clang::SourceLocation Loc, bool InsertAfter=true) {
-      std::string Indent, LineBuffer;      
+      llvm::StringRef Indent;
+      std::string LineBuffer;      
       getIndentaionOfLine(Loc, Indent);
 
       // dump all stored lines into LineBuffer
@@ -163,76 +135,64 @@ namespace ict {
     
     /// Replace the text in given source location with the new text.
     bool ReplaceText(clang::SourceRange SR) {
-      std::string Indent, LineBuffer;
+      llvm::StringRef Indent;
+      std::string LineBuffer;      
       getIndentaionOfLine(SR.getBegin(), Indent);
       dump(LineBuffer, Indent);
       return Rewrite.ReplaceText(SR, LineBuffer.c_str());
     }
 
     bool InsertTextAfterToken(clang::SourceLocation Loc) {
-      std::string Indent, LineBuffer;
+      llvm::StringRef Indent;
+      std::string LineBuffer;      
       getIndentaionOfLine(Loc, Indent);
       dump(LineBuffer, Indent);
       return Rewrite.InsertTextAfterToken(Loc, LineBuffer.c_str());
     }
 
-    RewriteHelper& operator << (unsigned u) {
-      AddToString<unsigned>(*CurLine, u);
-      return *this;
+#define DEFINE_OUTPUT_OPERATOR(Type) \
+    RewriteHelper& operator << (Type e) {   \
+      std::stringstream ss;                 \
+      ss << e; CurLine += ss.str();         \
+      return *this;                         \
     }
 
-    RewriteHelper& operator << (unsigned long ul) {
-      AddToString<unsigned long>(*CurLine, ul);
-      return *this;
-    }
+    DEFINE_OUTPUT_OPERATOR(unsigned)
+    DEFINE_OUTPUT_OPERATOR(unsigned long)
+    DEFINE_OUTPUT_OPERATOR(const unsigned long long&)
+    DEFINE_OUTPUT_OPERATOR(int)
+    DEFINE_OUTPUT_OPERATOR(long)
+    DEFINE_OUTPUT_OPERATOR(const long long&)
 
-    RewriteHelper& operator << (const unsigned long long& ull) {
-      AddToString<const unsigned long long&>(*CurLine, ull);
-      return *this;
-    }
+#undef DEFINE_OUTPUT_OPERATOR
 
-    RewriteHelper& operator << (int i) {
-      AddToString<int>(*CurLine, i);
-      return *this;
-    }
-
-    RewriteHelper& operator << (long l) {
-      AddToString<long>(*CurLine, l);
-      return *this;
-    }
-
-    RewriteHelper& operator << (const long long& ll) {
-      AddToString<const long long&>(*CurLine, ll);
-      return *this;
+    RewriteHelper& operator << (const std::string& str) {
+      CurLine += str; return *this;
     }
 
     RewriteHelper& operator << (const llvm::APInt &I) {
-      (*CurLine) += I.toString(10, false);
+      CurLine += I.toString(10, false);
       return *this;
     }
 
-    RewriteHelper& operator << (const std::string& str) {
-      (*CurLine) += str; return *this;
-    }
-
     RewriteHelper& operator << (const char *str) {
-      (*CurLine) += str; return *this;
+      CurLine += str; return *this;
     }
 
     RewriteHelper& operator << (clang::QualType Ty) {
       if (Ty.getTypePtrOrNull() != nullptr) {
-        (*CurLine) += Ty.getAsString();
+        CurLine += Ty.getAsString();
       }
       return *this;
     }
 
     RewriteHelper& operator << (clang::Stmt* S) {
-      (*CurLine) += Rewrite.ConvertToString(S);
+      CurLine += Rewrite.ConvertToString(S);
       return *this;
     }
 
     RewriteHelper& operator << (clang::NamedDecl* D) {
-      (*CurLine) += D->getNameAsString();
+      CurLine += D->getNameAsString();
       return *this;
     }
 
@@ -244,11 +204,11 @@ namespace ict {
   /// \brief Endl -
   /// just like a `std::endl', start a new line and flush the buffer.
   static RewriteHelper& Endl(RewriteHelper& RH) {
-    RH.endline(); return RH;
+    RH << "\n"; return RH;
   }
 
   static RewriteHelper& Indentation(RewriteHelper& RH) {
-    RH << "  "; return RH;
+    RH << RH.getDefaultIndent(); return RH;
   }
 
 } // namespace ict
