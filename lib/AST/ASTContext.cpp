@@ -1047,6 +1047,7 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target) {
     InitBuiltinType(GeneralRefTy, BuiltinType::GeneralRef);
     InitBuiltinType(TaskRefTy, BuiltinType::TaskRef);
     InitBuiltinType(ChanRefTy, BuiltinType::ChanRef);
+    InitBuiltinType(GroupTy, BuiltinType::Group);
   }
   
   // Builtin type for __objc_yes and __objc_no
@@ -1607,6 +1608,7 @@ ASTContext::getTypeInfoImpl(const Type *T) const {
 	case BuiltinType::ChanRef:
 	case BuiltinType::TaskRef:
 	case BuiltinType::GeneralRef:
+    case BuiltinType::Group:
 	  // The Refs in CoroC should be treated as a pointer
 
     case BuiltinType::OCLEvent:
@@ -7536,6 +7538,12 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
     Type = Context.ChanRefTy;
     break;
 
+  case 'g':
+    assert(HowLong == 0 && !Signed && !Unsigned &&
+           "Bad modifiers used with 'g'!");
+    Type = Context.GroupTy;
+    break;
+    
   case 'v':
     assert(HowLong == 0 && !Signed && !Unsigned &&
            "Bad modifiers used with 'v'!");

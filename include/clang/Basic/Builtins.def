@@ -1189,6 +1189,9 @@ LIBBUILTIN(__CoroC_Stop, "vr", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Now, "ULLi", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Sleep, "vULLi", "i", "libcoroc.h", COROC_LANG)
 
+LIBBUILTIN(__CoroC_Group, "g", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Sync, "vg", "i", "libcoroc.h", COROC_LANG)
+
 // Annotation function
 BUILTIN(__builtin_annotation, "v.", "tn")
 

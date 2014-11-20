@@ -48,6 +48,7 @@ bool FormatToken::isSimpleTypeSpecifier() const {
   case tok::kw_decltype:
   case tok::kw___task_t: //FIXME
   case tok::kw___chan_t: //FIXME
+  case tok::kw___group_t: // FIXME
     return true;
   default:
     return false;

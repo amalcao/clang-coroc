@@ -847,6 +847,7 @@ Type::ScalarTypeKind Type::getScalarTypeKind() const {
     if (BT->isFloatingPoint()) return STK_Floating;
     if (BT->getKind() == BuiltinType::TaskRef) return STK_TaskRef;
     if (BT->getKind() == BuiltinType::ChanRef) return STK_ChanRef;
+    if (BT->getKind() == BuiltinType::Group) return STK_Group;
     llvm_unreachable("unknown scalar builtin type");
   } else if (isa<PointerType>(T)) {
     return STK_CPointer;
@@ -1554,6 +1555,7 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
   case ChanRef:           return "__chan_t";
   case TaskRef:           return "__task_t";
   case GeneralRef:        return "__refcnt_t";
+  case Group:             return "__group_t";
   }
   
   llvm_unreachable("Invalid builtin type.");

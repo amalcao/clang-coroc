@@ -1161,15 +1161,35 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
   //    __CoroC_Spawn postfix-expression '(' [argument-expression-list]* ')'
   case tok::kw___CoroC_Spawn: {
     SourceLocation SpawnLoc = ConsumeToken();
+    ExprResult GroupRefExpr;
     if (!getLangOpts().CoroC) {
       Diag(SpawnLoc, diag::err_coro_disable);
       SkipUntil(tok::semi, StopAtSemi); // FIXME!!
       return ExprError();
     }
 
+    // check if any options is provided in "< ... >"
+    if (Tok.getKind() == tok::less) {
+      ConsumeToken(); // eat the '<'
+
+      GroupRefExpr = ParseCastExpression(false);
+      if (GroupRefExpr.isInvalid()) {
+        SkipUntil(tok::semi, StopAtSemi);
+        return ExprError();
+      }
+
+      // match the '>'
+      if (Tok.getKind() != tok::greater) {
+        ExpectAndConsume(tok::greater);
+        SkipUntil(tok::semi, StopAtSemi);
+        return ExprError();
+      }
+      ConsumeToken(); // eat the '>'
+    }
+
     Res = ParseCastExpression(false);
     if (Res.isInvalid()) return ExprError();
-    return Actions.ActOnCoroCSpawnCallExpr(SpawnLoc, Res.get());
+    return Actions.ActOnCoroCSpawnCallExpr(SpawnLoc, Res.get(), GroupRefExpr.get());
   }
 
   // postfix-expression:

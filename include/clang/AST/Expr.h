@@ -4559,16 +4559,19 @@ public:
 /// \brief CoroCSpawnCallExpr - for __CoroC_Spawn keyword
 class CoroCSpawnCallExpr : public Expr {
     CallExpr *TheCallExpr;
+    DeclRefExpr *TheGroupExpr;
     SourceLocation SpawnLoc; 
     SourceLocation InsertLoc;
 
     friend class ASTStmtReader;
 
 public:
-    CoroCSpawnCallExpr(SourceLocation SL, QualType T, CallExpr *E)
+    CoroCSpawnCallExpr(SourceLocation SL, QualType T, 
+                       CallExpr *E, DeclRefExpr *G = nullptr)
         : Expr(CoroCSpawnCallExprClass, T, VK_RValue,
                 OK_Ordinary, false, false, false, false)
-        , TheCallExpr(E), SpawnLoc(SL), InsertLoc(SL) { }
+        , TheCallExpr(E), TheGroupExpr(G)
+        , SpawnLoc(SL), InsertLoc(SL) { }
 
     /// \brief Build an empty block expression
     explicit CoroCSpawnCallExpr(EmptyShell Empty) 
@@ -4578,11 +4581,15 @@ public:
     CallExpr *getCallExpr() { return TheCallExpr; }
     void setCallExpr(CallExpr *E) { TheCallExpr = E; }
 
+    const DeclRefExpr *getGroupRefExpr() const { return TheGroupExpr; }
+    DeclRefExpr *getGroupRefExpr() { return TheGroupExpr; }
+    void setGroupRefExpr(DeclRefExpr *G) { TheGroupExpr = G; }
+ 
     SourceLocation getLocStart() const LLVM_READONLY {
       return SpawnLoc;
     }
     SourceLocation getLocEnd() const LLVM_READONLY {
-      return SpawnLoc;
+      return TheCallExpr->getLocEnd();
     }
 
     SourceLocation getInsertLoc() const LLVM_READONLY {

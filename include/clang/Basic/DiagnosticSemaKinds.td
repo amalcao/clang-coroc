@@ -7220,6 +7220,8 @@ def err_spawn_invalid_scope : Error<
   "__CoroC_Spawn not allowed in this scope">;
 def err_cannot_spawn_builtin: Error<
   "builtin function cannot be spawned">;
+def err_not_a_group_ref : Error<
+  "the option for __CoroC_Spawn must with a type of '__group_t'">;
 
 // __CoroC_Chan
 def err_chan_invalid_scope : Error<

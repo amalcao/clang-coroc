@@ -288,6 +288,7 @@ public:
   static const TST TST_task_t = clang::TST_task_t;
   static const TST TST_chan_t = clang::TST_chan_t;
   static const TST TST_refcnt_t = clang::TST_refcnt_t;
+  static const TST TST_group_t = clang::TST_group_t;
   static const TST TST_error = clang::TST_error;
 
   // type-qualifiers

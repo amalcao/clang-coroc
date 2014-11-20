@@ -453,6 +453,7 @@ const char *DeclSpec::getSpecifierName(DeclSpec::TST T,
   case DeclSpec::TST_task_t: return "__task_t";
   case DeclSpec::TST_chan_t: return "__chan_t";
   case DeclSpec::TST_refcnt_t: return "__refcnt_t";
+  case DeclSpec::TST_group_t: return "__group_t";
   case DeclSpec::TST_error:       return "(error)";
   }
   llvm_unreachable("Unknown typespec!");

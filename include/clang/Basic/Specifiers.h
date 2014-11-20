@@ -67,6 +67,7 @@ namespace clang {
     TST_task_t,         // CoroC __task_t
     TST_chan_t,         // CoroC __chan_t
     TST_refcnt_t,       // CoroC __refcnt_t
+    TST_group_t,        // CoroC __group_t
 
     TST_error         // erroneous type
   };

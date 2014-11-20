@@ -3124,6 +3124,11 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
                                      DiagID, Policy);
       break;
 
+    case tok::kw___group_t:
+      isInvalid = DS.SetTypeSpecType(DeclSpec::TST_group_t, Loc, PrevSpec,
+                                     DiagID, Policy);
+      break;
+
     case tok::kw___unknown_anytype:
       isInvalid = DS.SetTypeSpecType(TST_unknown_anytype, Loc,
                                      PrevSpec, DiagID, Policy);
@@ -4003,6 +4008,7 @@ bool Parser::isKnownToBeTypeSpecifier(const Token &Tok) const {
   case tok::kw___task_t:
   case tok::kw___chan_t:
   case tok::kw___refcnt_t:
+  case tok::kw___group_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
   case tok::kw_class:
@@ -4080,6 +4086,7 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw___chan_t:
   case tok::kw___task_t:
   case tok::kw___refcnt_t:
+  case tok::kw___group_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
   case tok::kw_class:
@@ -4225,6 +4232,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw___task_t:
   case tok::kw___chan_t:
   case tok::kw___refcnt_t:
+  case tok::kw___group_t:
 
     // struct-or-union-specifier (C99) or class-specifier (C++)
   case tok::kw_class:

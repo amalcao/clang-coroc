@@ -106,6 +106,7 @@ class ThunkHelper {
 
   CallExpr *TheCallExpr;
   std::string ThunkUID;
+  bool isGroupOp;
   bool hasDump;
 
   void dumpThunkStruct(RewriteHelper &RH);
@@ -113,17 +114,21 @@ class ThunkHelper {
   void dumpThunkFunc(RewriteHelper &RH);
 
 public:
-  ThunkHelper(ASTContext *C, Rewriter &R, CallExpr *CE, std::string UID)
-      : Context(C), Rewrite(R), TheCallExpr(CE), ThunkUID(UID), hasDump(false) {
+  ThunkHelper(ASTContext *C, Rewriter &R, 
+              CallExpr *CE, std::string UID, 
+              bool isGrpOp = false)
+      : Context(C), Rewrite(R), TheCallExpr(CE)
+      , ThunkUID(UID), isGroupOp(isGrpOp), hasDump(false) {
   }
 
-  bool MatchCallExpr(CallExpr *CE);
+  bool MatchCallExpr(CallExpr*, bool);
 
   void DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
-                             std::string paramName);
+                             DeclRefExpr *G, std::string paramName);
 
-  void GetFuncName(std::string &funcName);
-  void GetStructName(std::string &structName);
+  void GetFuncName(std::string&);
+  void GetCleanupName(std::string&);
+  void GetStructName(std::string&);
 
   bool HasDump() { return hasDump; }
 
@@ -314,7 +319,7 @@ class CoroCRecursiveASTVisitor
   Token getNextTok(SourceLocation CurLoc);
   SourceLocation getNextTokLocStart(SourceLocation CurLoc);
 
-  ThunkHelper *getOrCreateThunkHelper(CallExpr *C);
+  ThunkHelper *getOrCreateThunkHelper(CallExpr*, bool);
 
   QualType getBaseRefType(QualType Ty);
 
@@ -565,18 +570,24 @@ public:
 using namespace ict;
 
 /// Match if the current thunk is suitable for the given CallExpr
-bool ThunkHelper::MatchCallExpr(CallExpr *CE) {
+bool ThunkHelper::MatchCallExpr(CallExpr *CE, bool isGroupOp) {
   if (!TheCallExpr || !CE)
     return false;
   // compare the two names, that methord works for C env
-  return Rewrite.ConvertToString(TheCallExpr->getCallee()) ==
-         Rewrite.ConvertToString(CE->getCallee());
+  return this->isGroupOp == isGroupOp &&
+         (Rewrite.ConvertToString(TheCallExpr->getCallee()) ==
+          Rewrite.ConvertToString(CE->getCallee()) );
 }
 
 /// Get the name of the thunk helper function
 void ThunkHelper::GetFuncName(std::string &funcName) {
   funcName = "__thunk_helper_";
   funcName += ThunkUID;
+}
+
+void ThunkHelper::GetCleanupName(std::string &cleanupName) {
+  cleanupName = "__thunk_cleanup_";
+  cleanupName += ThunkUID;
 }
 
 /// Get the typename of the thunk helper's param
@@ -587,7 +598,7 @@ void ThunkHelper::GetStructName(std::string &structName) {
 
 /// Dump the thunk calling code into the OS
 void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
-                                        std::string paramName) {
+                                        DeclRefExpr *G, std::string paramName) {
 
   RH << Indentation << "struct __thunk_struct_" 
      << ThunkUID << "*  " << paramName << " = ("
@@ -606,10 +617,22 @@ void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
       RH << (*it) << ";" << Endl;
   }
 
+  // Init the group tag if has one
+  if (isGroupOp && G != nullptr)
+    RH << Indentation << paramName 
+       << "->_group = " << G << ";" << Endl;
+
   // Init the function pointer
   RH << Indentation << paramName << "->_fp = (void*)("
      << (Stmt*)(CE->getCallee()) << ");" << Endl << Indentation;
+
+  // Inc the task number in the group
+  if (isGroupOp && G != nullptr) {
+    RH << Indentation 
+       << "__CoroC_Add_Task(" << G << ");" << Endl;
+  }
 }
+
 
 /// Dump the thunk param struct's body
 void ThunkHelper::dumpThunkStruct(RewriteHelper& RH) {
@@ -620,6 +643,10 @@ void ThunkHelper::dumpThunkStruct(RewriteHelper& RH) {
   for (; it != TheCallExpr->arg_end(); ++it) {
     RH << Indentation << (*it)->getType() << " _param" << i++ << ";" << Endl;
   }
+  
+  if (isGroupOp)
+    RH << Indentation << "__group_t _group;" << Endl;
+
   RH << Indentation << "void *_fp;" << Endl << "};" << Endl;
 }
 
@@ -639,13 +666,13 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
   unsigned numArgs = TheCallExpr->getNumArgs();
   Expr *E = TheCallExpr->getCallee();
 
-  // Generate the func declaration:
+  /// Generate the thunk func declaration:
   RH << Endl << "static int __thunk_helper_" << ThunkUID << "("
      << "struct __thunk_struct_" << ThunkUID << " *_arg) {" << Endl;
 
   // Generate the func body:
 
-  // 1. decalarate a pointer to the callee
+  // 1.1. decalarate a pointer to the callee
   QualType T = E->getType();
   assert(T->isPointerType());
 
@@ -661,10 +688,10 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
 
   RH << ");" << Endl;
 
-  // 2. assign the callee address to the `fp'
+  // 1.2. assign the callee address to the `fp'
   RH << Indentation << "fp = (typeof(fp))(_arg->_fp);" << Endl;
 
-  // 3. calling the thunk helper function
+  // 1.3. calling the thunk helper function
   RH << Indentation << "fp(";
 
   std::vector<int> ArgStk;
@@ -685,16 +712,31 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
 
   RH << ");" << Endl;
 
-  // 3. release the auto-references if any exisit
+  RH << Indentation << "__CoroC_Exit(0);" << Endl;
+  RH << "}" << Endl;
+
+  
+  /// Generate the cleanup callback declaration:
+  RH << Endl << "static int __thunk_cleanup_" << ThunkUID << "("
+     << "struct __thunk_struct_" << ThunkUID << " *_arg) {" << Endl;
+
+  // Generate the func body:
+  
+  // 2.1. release the auto-references if any exisit
   for (unsigned k = 0; k < ArgStk.size(); ++k) {
     RH << Indentation << "__refcnt_put(_arg->_param" 
        << ArgStk[k] << ");" << Endl;
   }
 
-  // 4. release the _arg and quit
-  if (numArgs > 0)
-    RH << Indentation << "free(_arg);" << Endl;
-  RH << Indentation << "__CoroC_Exit(0);" << Endl;
+  // 2.2. join to the given group
+  if (isGroupOp)
+    RH << Indentation 
+       << "__CoroC_Notify(_arg->_group);" << Endl;
+
+  // 2.3. release the _arg and quit
+  RH << Indentation << "if (_arg) free(_arg);" << Endl;
+ 
+  RH << Indentation << "return 0;" << Endl;
   RH << "}" << Endl;
 }
 
@@ -736,17 +778,18 @@ void CoroCRecursiveASTVisitor::DumpThunkHelpers(RewriteHelper &RH) {
 }
 
 /// Get or Create a thunk helper for CoroC Spawn Call
-ThunkHelper *CoroCRecursiveASTVisitor::getOrCreateThunkHelper(CallExpr *C) {
+ThunkHelper *CoroCRecursiveASTVisitor::getOrCreateThunkHelper(CallExpr *C, 
+                                                              bool isGroupOp) {
   std::vector<ThunkHelper *>::iterator it = ThunkPool.begin();
   for (; it != ThunkPool.end(); ++it) {
-    if ((*it)->MatchCallExpr(C))
+    if ((*it)->MatchCallExpr(C, isGroupOp))
       return (*it);
   }
 
   std::stringstream SS;
   SS << unique_id_generator++;
 
-  ThunkHelper *Thunk = new ThunkHelper(Context, Rewrite, C, SS.str());
+  ThunkHelper *Thunk = new ThunkHelper(Context, Rewrite, C, SS.str(), isGroupOp);
 
   ThunkPool.push_back(Thunk);
   return Thunk;
@@ -1301,6 +1344,7 @@ Expr *CoroCRecursiveASTVisitor::VisitChanOperator(BinaryOperator *B,
 /// Transform the __CoroC_Spawn keyword
 bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
   CallExpr *CE = E->getCallExpr();
+  DeclRefExpr *G = E->getGroupRefExpr();
   int numArgs = CE->getNumArgs();
   bool noThunk = false;
 
@@ -1308,7 +1352,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 
   // If the spawn call has one pointer typed param,
   // we don't need to generate the thunk function wrapper.
-  if (numArgs == 1) {
+  if (G == nullptr && numArgs == 1) {
     Expr *Arg = CE->getArg(0);
     noThunk = Arg->getType().getTypePtr()->isPointerType();
   }
@@ -1317,7 +1361,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
     Expr *Callee = CE->getCallee();
     // Transform to runtime call:
     //  __CoroC_Spawn( (__CoroC_spawn_handler_t)func, param );
-    Rewrite.InsertTextAfterToken(E->getLocEnd(), "((__CoroC_spawn_handler_t)");
+    Rewrite.InsertTextAfterToken(E->getLocStart(), "((__CoroC_spawn_handler_t)");
 
     SourceLocation Loc = getNextTokLocStart(Callee->getLocEnd());
     Rewrite.ReplaceText(Loc, 1, ", ");
@@ -1331,26 +1375,29 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
     paramName << "__coroc_temp_" << unique_id_generator++;
 
     // get or create a new thunker
-    ThunkHelper *Thunk = getOrCreateThunkHelper(CE);
+    ThunkHelper *Thunk = getOrCreateThunkHelper(CE, (G != nullptr));
     RewriteHelper RH(&Rewrite);
 
-    if (numArgs != 0)
-      RH << "{" << Endl;
+    RH << "{" << Endl;
 
-    Thunk->DumpThunkCallPrologue(RH, CE, paramName.str());
+    Thunk->DumpThunkCallPrologue(RH, CE, G, paramName.str());
 
     // insert the prologue before the __CoroC_Spawn keyword
     RH.InsertText(SpawnLoc);
 
     // replace all the CE's text ..
-    std::string funcName;
+    std::string funcName, cleanupName("NULL");
     Thunk->GetFuncName(funcName);
-    RH << "((__CoroC_spawn_handler_t)" << funcName << ", ";
+    Thunk->GetCleanupName(cleanupName);
 
-    if (CE->getNumArgs() == 0)
-      RH << "NULL); " << Endl;
-    else
-      RH << paramName.str() << ");" << Endl << "}";
+    // arg0 : entry function handler
+    RH << "((__CoroC_spawn_handler_t)" << funcName << ", ";
+    // arg1 : param pointer
+    RH << paramName.str() << ", ";
+    // arg2 : cleanup function handler
+    RH << "(__CoroC_spawn_handler_t)" << cleanupName << ");";
+    
+    RH << Endl << "}";
 
     // delete the ';' in nextline
     SourceLocation Loc = getNextTokLocStart(CE->getLocEnd());
@@ -1358,6 +1405,19 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 
     // replace the text
     RH.ReplaceText(CE->getSourceRange());
+
+    // remove the option section <...> after the '__CoroC_Spawn' keyword
+    if (G != nullptr) {
+      SourceLocation StartLoc = getNextTokLocStart(SpawnLoc); // the Loc of '<'
+      SourceLocation EndLoc = getNextTokLocStart(G->getLocEnd()); // the Loc of '>'
+      
+      Rewrite.RemoveText(SourceRange(StartLoc, EndLoc));
+      // stop to traverse the GroupRefExpr 
+      E->setGroupRefExpr(nullptr);
+    }
+
+    // replace the '__CoroC_Spawn' with '__CoroC_Spawn_Opt'
+    Rewrite.InsertTextAfterToken(SpawnLoc, "_Opt");
 
     // stop to traverse the CallExpr since it has been replaced
     E->setCallExpr(nullptr);

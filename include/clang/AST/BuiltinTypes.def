@@ -141,6 +141,8 @@ BUILTIN_TYPE(ChanRef, ChanRefTy)
 BUILTIN_TYPE(TaskRef, TaskRefTy)
 // '__refcnt_t'
 BUILTIN_TYPE(GeneralRef, GeneralRefTy)
+// '__group_t'
+BUILTIN_TYPE(Group, GroupTy)
 
 
 // This is the type of C++0x 'nullptr'.

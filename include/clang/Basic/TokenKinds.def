@@ -585,6 +585,7 @@ KEYWORD(__CoroC_Null, KEYCOROC)
 KEYWORD(__task_t, KEYCOROC)
 KEYWORD(__chan_t, KEYCOROC)
 KEYWORD(__refcnt_t, KEYCOROC)
+KEYWORD(__group_t, KEYCOROC)
 
 
 //===----------------------------------------------------------------------===//

@@ -223,6 +223,7 @@ void Sema::Initialize() {
     addImplicitTypedef("__chan_t", Context.ChanRefTy);
     addImplicitTypedef("__task_t", Context.TaskRefTy);
     addImplicitTypedef("__refcnt_t", Context.GeneralRefTy);
+    addImplicitTypedef("__group_t", Context.GroupTy);
   }
 #endif
 

@@ -3102,8 +3102,10 @@ public:
   StmtResult ActOnCoroCYieldStmt(SourceLocation YieldLoc);
   StmtResult ActOnCoroCQuitStmt(SourceLocation QuitLoc, Expr *E);
 
-  ExprResult ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E);
-  ExprResult BuildCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E);
+  ExprResult ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, 
+                                     Expr *E, Expr *G);
+  ExprResult BuildCoroCSpawnCallExpr(SourceLocation SpawnLoc, 
+                                     Expr *E, Expr *G);
 
   ExprResult ActOnCoroCMakeChanExpr(SourceLocation ChanLoc, 
                                     SourceLocation GTLoc,
