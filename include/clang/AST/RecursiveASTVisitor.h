@@ -2374,6 +2374,7 @@ DEF_TRAVERSE_STMT(CoroCSelectStmt, {
 	return true; })
 
 DEF_TRAVERSE_STMT(CoroCNullExpr, {})
+DEF_TRAVERSE_STMT(CoroCAsyncCallExpr, {})
 
 // OpenMP clauses.
 template <typename Derived>

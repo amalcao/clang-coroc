@@ -107,7 +107,9 @@ class ThunkHelper {
   CallExpr *TheCallExpr;
   std::string ThunkUID;
   bool isGroupOp;
+  bool isAsyncCall; // if used by __CoroC_Async_Call
   bool hasDump;
+  bool useFuncPtr;
 
   void dumpThunkStruct(RewriteHelper &RH);
   void dumpThunkFuncArgsType(RewriteHelper &RH, const FunctionProtoType *FuncTy);
@@ -116,12 +118,15 @@ class ThunkHelper {
 public:
   ThunkHelper(ASTContext *C, Rewriter &R, 
               CallExpr *CE, std::string UID, 
-              bool isGrpOp = false)
+              bool isGrpOp = false, 
+              bool isAsync = false)
       : Context(C), Rewrite(R), TheCallExpr(CE)
-      , ThunkUID(UID), isGroupOp(isGrpOp), hasDump(false) {
+      , ThunkUID(UID), isGroupOp(isGrpOp)
+      , isAsyncCall(isAsync)
+      , hasDump(false), useFuncPtr(true) {
   }
 
-  bool MatchCallExpr(CallExpr*, bool);
+  bool MatchCallExpr(CallExpr*, bool, bool);
 
   void DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
                              DeclRefExpr *G, std::string paramName);
@@ -319,7 +324,8 @@ class CoroCRecursiveASTVisitor
   Token getNextTok(SourceLocation CurLoc);
   SourceLocation getNextTokLocStart(SourceLocation CurLoc);
 
-  ThunkHelper *getOrCreateThunkHelper(CallExpr*, bool);
+  ThunkHelper *getOrCreateThunkHelper(CallExpr *CE, bool isGroupOp, 
+                                      bool isAsync = false);
 
   QualType getBaseRefType(QualType Ty);
 
@@ -366,6 +372,7 @@ public:
   bool VisitReturnStmt(ReturnStmt *S);
 
   bool VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E);
+  bool VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E);
   bool VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E);
   bool VisitCoroCYieldStmt(CoroCYieldStmt *S);
   bool VisitCoroCQuitStmt(CoroCQuitStmt *S);
@@ -570,11 +577,12 @@ public:
 using namespace ict;
 
 /// Match if the current thunk is suitable for the given CallExpr
-bool ThunkHelper::MatchCallExpr(CallExpr *CE, bool isGroupOp) {
+bool ThunkHelper::MatchCallExpr(CallExpr *CE, bool isGroupOp, bool isAsync) {
   if (!TheCallExpr || !CE)
     return false;
   // compare the two names, that methord works for C env
   return this->isGroupOp == isGroupOp &&
+         this->isAsyncCall == isAsync &&
          (Rewrite.ConvertToString(TheCallExpr->getCallee()) ==
           Rewrite.ConvertToString(CE->getCallee()) );
 }
@@ -599,11 +607,31 @@ void ThunkHelper::GetStructName(std::string &structName) {
 /// Dump the thunk calling code into the OS
 void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
                                         DeclRefExpr *G, std::string paramName) {
+  // if the CE's callee is a global expr, directly call it!!
+  // FIXME : this implementation is not good !!
+  Expr *E = CE->getCallee();
+  while (CastExpr *Cast = dyn_cast<CastExpr>(E)) {
+    E = Cast->getSubExpr();
+  }
+  if (E != nullptr && isa<DeclRefExpr>(E)) {
+    DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E);
+    assert(DE != nullptr);
+    DeclContext *DC = DE->getDecl()->getDeclContext();
+    if (DC == nullptr || isa<TranslationUnitDecl>(DC))
+      useFuncPtr = false;
+  }
+
 
   RH << Indentation << "struct __thunk_struct_" 
      << ThunkUID << "*  " << paramName << " = ("
-     << "struct __thunk_struct_" << ThunkUID << "*)malloc(sizeof("
-     << "struct __thunk_struct_" << ThunkUID << "));" << Endl;
+     << "struct __thunk_struct_" << ThunkUID << "*)";
+     
+  if (isAsyncCall)    
+    RH << "alloca"; // is async call, alloc from the stack
+  else
+    RH << "malloc";
+
+  RH << "(sizeof(struct __thunk_struct_" << ThunkUID << "));" << Endl;
 
   // Init each arg
   int i = 0;
@@ -611,7 +639,8 @@ void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
   for (; it != CE->arg_end(); ++it) {
     RH << Indentation << paramName << "->_param" << i++ << " = ";
 
-    if (IsCoroCAutoRefType(*Context,(*it)->getType()))
+    if (!isAsyncCall &&
+        IsCoroCAutoRefType(*Context,(*it)->getType()))
       RH << "__refcnt_get(" << (*it) << ");" << Endl;
     else
       RH << (*it) << ";" << Endl;
@@ -623,8 +652,9 @@ void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
        << "->_group = " << G << ";" << Endl;
 
   // Init the function pointer
-  RH << Indentation << paramName << "->_fp = (void*)("
-     << (Stmt*)(CE->getCallee()) << ");" << Endl << Indentation;
+  if (useFuncPtr)
+    RH << Indentation << paramName << "->_fp = (void*)("
+       << (Stmt*)(CE->getCallee()) << ");" << Endl << Indentation;
 
   // Inc the task number in the group
   if (isGroupOp && G != nullptr) {
@@ -636,6 +666,8 @@ void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
 
 /// Dump the thunk param struct's body
 void ThunkHelper::dumpThunkStruct(RewriteHelper& RH) {
+  QualType Ty = TheCallExpr->getCallReturnType();
+
   RH << Endl << "struct __thunk_struct_" << ThunkUID << " { " << Endl;
 
   int i = 0;
@@ -646,8 +678,20 @@ void ThunkHelper::dumpThunkStruct(RewriteHelper& RH) {
   
   if (isGroupOp)
     RH << Indentation << "__group_t _group;" << Endl;
+  
+  // FIXME : only be used by __CorC_Async_Call ..
+  if (isAsyncCall && Ty != Context->VoidTy)
+    RH << Indentation << Ty << " _ret;" << Endl;
 
-  RH << Indentation << "void *_fp;" << Endl << "};" << Endl;
+  // FIXME : use a function pointer to reference the 
+  // actually called function because the CallExpr may be
+  // a local var such as function pointer or member field,
+  // which cannot reference outside the local scope, so record
+  // the function's address into the param structure now.
+  if (useFuncPtr)
+    RH << Indentation << "void *_fp;" << Endl;
+  
+  RH << "};" << Endl;
 }
 
 /// Dump the thunk function's arglist types
@@ -667,33 +711,48 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
   Expr *E = TheCallExpr->getCallee();
 
   /// Generate the thunk func declaration:
-  RH << Endl << "static int __thunk_helper_" << ThunkUID << "("
+  RH << Endl << "static "
+     << (isAsyncCall ? "void*" : "int")
+     << " __thunk_helper_" << ThunkUID << "("
      << "struct __thunk_struct_" << ThunkUID << " *_arg) {" << Endl;
 
   // Generate the func body:
 
-  // 1.1. decalarate a pointer to the callee
-  QualType T = E->getType();
-  assert(T->isPointerType());
+  if (useFuncPtr) {
+    // 1.1. decalarate a pointer to the callee
+    RH << Indentation << TheCallExpr->getType() << " (*fp) (";
+  
+    QualType T = E->getType();
+    assert(T->isPointerType());
 
-  const Type *Ty = T->getPointeeType()->getUnqualifiedDesugaredType();
-  assert(isa<FunctionProtoType>(Ty));
+    const Type *Ty = T->getPointeeType()->getUnqualifiedDesugaredType();
+    assert(isa<FunctionProtoType>(Ty));
 
-  const FunctionProtoType *FuncTy =
+    const FunctionProtoType *FuncTy =
       reinterpret_cast<const FunctionProtoType *>(Ty);
 
-  RH << Indentation << TheCallExpr->getType() << " (*fp) (";
+    dumpThunkFuncArgsType(RH, FuncTy);
+ 
+    RH << ");" << Endl;
 
-  dumpThunkFuncArgsType(RH, FuncTy);
+    // 1.2. assign the callee address to the `fp'
+    RH << Indentation << "fp = (typeof(fp))(_arg->_fp);" << Endl;
 
-  RH << ");" << Endl;
-
-  // 1.2. assign the callee address to the `fp'
-  RH << Indentation << "fp = (typeof(fp))(_arg->_fp);" << Endl;
-
-  // 1.3. calling the thunk helper function
-  RH << Indentation << "fp(";
-
+    // 1.3. calling the thunk helper function
+    if (!isAsyncCall ||
+        TheCallExpr->getType() == Context->VoidTy)
+      RH << Indentation << "fp(";
+    else
+      RH << Indentation << "_arg->_ret = fp(";
+  } else {
+    // directly calling the function 
+    if (!isAsyncCall ||
+        TheCallExpr->getType() == Context->VoidTy)
+      RH << Indentation << E << "(";
+    else
+      RH << Indentation << "_arg->_ret = " << E << "(";
+  }
+  
   std::vector<int> ArgStk;
   if (numArgs > 0) {
     int i = 0;
@@ -712,10 +771,15 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
 
   RH << ");" << Endl;
 
-  RH << Indentation << "__CoroC_Exit(0);" << Endl;
-  RH << "}" << Endl;
+  if (isAsyncCall)
+    RH << Indentation << "return NULL;" << Endl;
+  else
+    RH << Indentation << "__CoroC_Exit(0);" << Endl;
 
+  RH << "}" << Endl;
   
+  if (isAsyncCall) return ;
+
   /// Generate the cleanup callback declaration:
   RH << Endl << "static int __thunk_cleanup_" << ThunkUID << "("
      << "struct __thunk_struct_" << ThunkUID << " *_arg) {" << Endl;
@@ -779,17 +843,19 @@ void CoroCRecursiveASTVisitor::DumpThunkHelpers(RewriteHelper &RH) {
 
 /// Get or Create a thunk helper for CoroC Spawn Call
 ThunkHelper *CoroCRecursiveASTVisitor::getOrCreateThunkHelper(CallExpr *C, 
-                                                              bool isGroupOp) {
+                                                              bool isGroupOp,
+                                                              bool isAsync) {
   std::vector<ThunkHelper *>::iterator it = ThunkPool.begin();
   for (; it != ThunkPool.end(); ++it) {
-    if ((*it)->MatchCallExpr(C, isGroupOp))
+    if ((*it)->MatchCallExpr(C, isGroupOp, isAsync))
       return (*it);
   }
 
   std::stringstream SS;
   SS << unique_id_generator++;
 
-  ThunkHelper *Thunk = new ThunkHelper(Context, Rewrite, C, SS.str(), isGroupOp);
+  ThunkHelper *Thunk = new ThunkHelper(Context, Rewrite, 
+                                       C, SS.str(), isGroupOp, isAsync);
 
   ThunkPool.push_back(Thunk);
   return Thunk;
@@ -1421,6 +1487,66 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 
     // stop to traverse the CallExpr since it has been replaced
     E->setCallExpr(nullptr);
+  }
+
+  return true;
+}
+
+/// Transform the __CoroC_Async_Call keyword
+bool CoroCRecursiveASTVisitor::VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
+  CallExpr *CE = E->getCallExpr();
+  int numArgs = CE->getNumArgs();
+
+  SourceLocation AsyncLoc = E->getLocStart();
+  Expr *Callee = CE->getCallee();
+  QualType Ty = E->getType();
+  bool isVoidTy = (Ty == Context->VoidTy);
+  
+  if (numArgs == 0 && isVoidTy) {
+    // no need generate the thunk wrraper.
+    // Transform "__CoroC_Async_Call func()"
+    //   to "__CoroC_Async_Call( (__CoroC_async_hanlder_t)func, NULL)"
+    Rewrite.InsertTextAfterToken(AsyncLoc, "( (__CoroC_async_handler_t)");
+    SourceLocation Loc = getNextTokLocStart(Callee->getLocEnd()); // the '(' after func
+    Rewrite.ReplaceText(Loc, 1, ", ");
+  }
+  else {
+    // generate a random unique temp name
+    std::stringstream paramName;
+    paramName << "__coroc_temp_" << unique_id_generator++;
+
+    // get or create a new thunker
+    ThunkHelper *Thunk = getOrCreateThunkHelper(CE, /*isGroupOp=*/false, /*isAsync=*/true);
+    RewriteHelper RH(&Rewrite);
+
+    if (!isVoidTy) RH << "("; // !!
+    RH << "{" << Endl; 
+
+    Thunk->DumpThunkCallPrologue(RH, CE, nullptr, paramName.str());
+
+    RH.InsertText(AsyncLoc);
+
+    // replace all the CE's text ..
+    std::string funcName;
+    Thunk->GetFuncName(funcName);
+
+    // arg0 : async function handler
+    RH << "((__CoroC_async_handler_t)" << funcName << ", ";
+    // arg1 : param pointer
+    RH << paramName.str() << ");" << Endl;
+    
+    // record the return value and release the param ..
+    if (!isVoidTy)
+      RH << Indentation << paramName.str() << "->_ret; });" << Endl;
+    else
+      RH << "}" << Endl;
+
+    // repalce the orignal callexpr's text ..
+    RH.ReplaceText(CE->getSourceRange());
+
+    // delete the ';' in nextline
+    SourceLocation Loc = getNextTokLocStart(CE->getLocEnd());
+    Rewrite.ReplaceText(Loc, 1, "");
   }
 
   return true;

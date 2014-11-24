@@ -920,6 +920,10 @@ void StmtProfiler::VisitCoroCNullExpr(const CoroCNullExpr* E) {
   VisitExpr(E);
 }
 
+void StmtProfiler::VisitCoroCAsyncCallExpr(const CoroCAsyncCallExpr* E) {
+  VisitExpr(E);
+}
+
 void StmtProfiler::VisitCoroCYieldStmt(const CoroCYieldStmt *S) {
   VisitStmt(S);
 }

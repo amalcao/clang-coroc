@@ -13705,14 +13705,25 @@ Sema::ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E, Expr *G) {
                                           Context.TaskRefTy, CE, RE);
 }
 
-#if 0
-ExprResult 
-Sema::BuildCoroCSpawnCallExpr(SourceLocation SpawnLoc, 
-                              CallExpr *E, DeclRefExpr *G) {
-  return new (Context) CoroCSpawnCallExpr(SpawnLoc, 
-                                          Context.TaskRefTy, E, G);
+/// ActOnCoroCAsyncCallExpr - Parse __CoroC_Async_Call
+ExprResult
+Sema::ActOnCoroCAsyncCallExpr(SourceLocation AsyncLoc, Expr *E) {
+  if (FunctionScopes.size() < 1 ||
+      getCurFunction()->CompoundScopes.size() < 1) {
+    Diag(AsyncLoc, diag::err_async_call_invalid_scope);
+    return ExprError();
+  }
+
+  // check if the E is a CallExpr
+  CallExpr *CE = dyn_cast<CallExpr>(E);
+  if (CE == nullptr) {
+    Diag(E->getLocStart(), diag::err_not_a_call);
+    return ExprError();
+  }
+
+  return new (Context) CoroCAsyncCallExpr(AsyncLoc,
+                                          CE->getCallReturnType(), CE);
 }
-#endif
 
 /// ActOnCoroCMakeChanExpr - Parse __CoroC_Chan
 ExprResult
@@ -13740,17 +13751,6 @@ Sema::ActOnCoroCMakeChanExpr(SourceLocation ChanLoc,
     return new (Context) CoroCMakeChanExpr(ChanLoc, GTLoc, TyRange,
                                            Context.ChanRefTy, T, E);
 }
-
-#if 0
-ExprResult
-Sema::BuildCoroCMakeChanExpr(SourceLocation ChanLoc, 
-                             SourceLocation GTLoc, 
-                             SourceRange TyRange,
-                             QualType T, Expr *E) {
-    // TODO
-    return new (Context) CoroCMakeChanExpr(ChanLoc, GTLoc, TyRange, Context.ChanRefTy, T, E);
-}
-#endif
 
 /// ActOnCoroCNullLiteral - Parse __CoroC_Null and build the Expr
 ExprResult

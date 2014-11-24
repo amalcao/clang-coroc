@@ -2286,6 +2286,7 @@ DEF_TRAVERSE_STMT(CoroCSelectStmt, {
 	TRY_TO(TraverseStmt(S->getBody())); })
 
 DEF_TRAVERSE_STMT(CoroCNullExpr, {})
+DEF_TRAVERSE_STMT(CoroCAsyncCallExpr, {})
 
 // OpenMP directives.
 template <typename Derived>

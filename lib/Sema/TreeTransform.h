@@ -10400,53 +10400,49 @@ TreeTransform<Derived>::TransformCapturedStmt(CapturedStmt *S) {
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformCoroCYieldStmt(CoroCYieldStmt *S) {
-    return S;
+  return S;
 }
 
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformCoroCQuitStmt(CoroCQuitStmt *S) {
-    return S;
+  return S;
 }
 
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformCoroCCaseStmt(CoroCCaseStmt *S) {
-	return S;
+  return S;
 }
 
 template<typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformCoroCSelectStmt(CoroCSelectStmt *S) {
-	return S;
+  return S;
 }
 
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
-#if 0
-    Expr *EE = E->getCallExpr();
-    
-    ExprResult NewExpr = getDerived().TransformExpr(EE)
-    if (NewExpr.isInvalid())
-        return ExprError();
-    
-    return getSema().BuildCoroCSpawnCallExpr(E->getLocation(), NewExpr.get());
-#else
-    llvm_unreachable("Cannot transform CoroCSpawnCallExpr now");
-#endif
+  llvm_unreachable("Cannot transform CoroCSpawnCallExpr now");
 }
 
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
-    llvm_unreachable("Cannot transform CoroCMakeChanExpr now");
+  llvm_unreachable("Cannot transform CoroCMakeChanExpr now");
 }
 
 template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCoroCNullExpr(CoroCNullExpr *E) {
-    llvm_unreachable("Cannot transform CoroCNullExpr now");
+  llvm_unreachable("Cannot transform CoroCNullExpr now");
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
+  llvm_unreachable("Cannot transform CoroCAsyncCallExpr now");
 }
 
 

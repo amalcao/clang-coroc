@@ -1626,6 +1626,12 @@ void ASTStmtWriter::VisitCoroCNullExpr(CoroCNullExpr *E) {
     Code = serialization::EXPR_COROC_NULL;
 }
 
+void ASTStmtWriter::VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
+    VisitExpr(E);
+    Writer.AddSourceLocation(E->getLocStart(), Record);
+    Code = serialization::EXPR_COROC_ASYNC_CALL;
+}
+
 void ASTStmtWriter::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
     VisitStmt(S);
     Writer.AddSourceLocation(S->getYieldLoc(), Record);

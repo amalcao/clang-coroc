@@ -3104,17 +3104,13 @@ public:
 
   ExprResult ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, 
                                      Expr *E, Expr *G);
-  ExprResult BuildCoroCSpawnCallExpr(SourceLocation SpawnLoc, 
-                                     Expr *E, Expr *G);
 
   ExprResult ActOnCoroCMakeChanExpr(SourceLocation ChanLoc, 
                                     SourceLocation GTLoc,
                                     SourceRange TyRange,
                                     ParsedType T, Expr *E);
-  ExprResult BuildCoroCMakeChanExpr(SourceLocation ChanLoc, 
-                                    SourceLocation GTLoc,
-                                    SourceRange TyRange,
-                                    QualType T, Expr *E);
+
+  ExprResult ActOnCoroCAsyncCallExpr(SourceLocation AsyncLoc, Expr *E);
 
   StmtResult ActOnCoroCCaseOrDefaultStmt(SourceLocation CaseLoc, 
   										 Expr *E, Stmt *Body);

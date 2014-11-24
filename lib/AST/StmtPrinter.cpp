@@ -2172,6 +2172,10 @@ void StmtPrinter::VisitCoroCNullExpr(CoroCNullExpr *E) {
   OS << "__CoroC_Null";
 }
 
+void StmtPrinter::VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
+  OS << "__CoroC_Async_Call ";
+}
+
 void StmtPrinter::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
   Indent() << "__CoroC_Yield;\n";
 }

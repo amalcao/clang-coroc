@@ -1660,31 +1660,35 @@ void ASTStmtReader::VisitAsTypeExpr(AsTypeExpr *E) {
 // CoroC Expressions and Statements.
 //===----------------------------------------------------------------------===//
 void ASTStmtReader::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
-    llvm_unreachable("not implemented yet");
+  llvm_unreachable("not implemented yet");
 }
 
 void ASTStmtReader::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
-    llvm_unreachable("not implemented yet");
+  llvm_unreachable("not implemented yet");
 }
 
 void ASTStmtReader::VisitCoroCNullExpr(CoroCNullExpr *E) {
-    llvm_unreachable("not implemented yet");
+  llvm_unreachable("not implemented yet");
 }
 
 void ASTStmtReader::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
-    llvm_unreachable("not implemented yet");
+  llvm_unreachable("not implemented yet");
 }
 
 void ASTStmtReader::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
-    llvm_unreachable("not implemented yet");
+  llvm_unreachable("not implemented yet");
 }
 
 void ASTStmtReader::VisitCoroCCaseStmt(CoroCCaseStmt *S) {
-	llvm_unreachable("not implemented yet");
+  llvm_unreachable("not implemented yet");
 }
 
 void ASTStmtReader::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
-	llvm_unreachable("not implemented yet");
+  llvm_unreachable("not implemented yet");
+}
+
+void ASTStmtReader::VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
+  llvm_unreachable("not implemented yet");
 }
 
 //===----------------------------------------------------------------------===//
@@ -2857,6 +2861,8 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
 
     case EXPR_COROC_SPAWN:
     case EXPR_COROC_CHAN:
+    case EXPR_COROC_NULL:
+    case EXPR_COROC_ASYNC_CALL:
         llvm_unreachable("not implemented yet");
         break;
     }

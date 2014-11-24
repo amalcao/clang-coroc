@@ -7223,6 +7223,10 @@ def err_cannot_spawn_builtin: Error<
 def err_not_a_group_ref : Error<
   "the option for __CoroC_Spawn must with a type of '__group_t'">;
 
+// __CoroC_Async_Call
+def err_async_call_invalid_scope : Error<
+  "__CoroC_Async_Call not allowed in this scope">;
+
 // __CoroC_Chan
 def err_chan_invalid_scope : Error<
     "__CoroC_Chan not allowed in this scope">;

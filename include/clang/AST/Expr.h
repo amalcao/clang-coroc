@@ -4683,6 +4683,47 @@ public:
   child_range children() { return child_range(); }
 };
 
+/// CoroCAsyncCallExpr - for CoroC keyword __CoroC_Async_Call
+class CoroCAsyncCallExpr : public Expr {
+private:
+  Stmt* TheCallExpr;
+  SourceLocation AsyncLoc;
+
+  friend class ASTReader;
+  friend class ASTStmtReader;
+public:
+  CoroCAsyncCallExpr(SourceLocation SL, QualType T, CallExpr *CE)
+    : Expr(CoroCAsyncCallExprClass, T, VK_RValue,
+                OK_Ordinary, false, false, false, false)
+    , TheCallExpr(CE), AsyncLoc(SL) {}
+  explicit CoroCAsyncCallExpr(EmptyShell Empty)
+    : Expr(CoroCAsyncCallExprClass, Empty) {}
+
+  SourceLocation getLocStart() const LLVM_READONLY { return AsyncLoc; }
+  SourceLocation getLocEnd() const LLVM_READONLY { 
+    return TheCallExpr->getLocEnd(); 
+  }
+  
+  const CallExpr* getCallExpr() const { 
+    return cast<CallExpr>(TheCallExpr); 
+  }
+  CallExpr* getCallExpr() { 
+    return cast<CallExpr>(TheCallExpr); 
+  }
+  void setCallExpr(CallExpr *CE) { 
+    TheCallExpr = CE; 
+  }
+ 
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == CoroCAsyncCallExprClass;
+  }
+
+  child_range children() { 
+    return child_range(&TheCallExpr, &TheCallExpr+1); 
+  }
+}; 
+
+
 /// AsTypeExpr - Clang builtin function __builtin_astype [OpenCL 6.2.4.2]
 /// This AST node provides support for reinterpreting a type to another
 /// type of the same size.

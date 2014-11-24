@@ -1158,7 +1158,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
   }
 
   // postfix-expression:
-  //    __CoroC_Spawn postfix-expression '(' [argument-expression-list]* ')'
+  //    __CoroC_Spawn[<group>]* postfix-expression '(' [argument-expression-list]* ')'
   case tok::kw___CoroC_Spawn: {
     SourceLocation SpawnLoc = ConsumeToken();
     ExprResult GroupRefExpr;
@@ -1190,6 +1190,21 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     Res = ParseCastExpression(false);
     if (Res.isInvalid()) return ExprError();
     return Actions.ActOnCoroCSpawnCallExpr(SpawnLoc, Res.get(), GroupRefExpr.get());
+  }
+
+  // postfix-expression:
+  //    __CoroC_Async_Call postfix-expression '(' [argument-expression-list]* ')'
+  case tok::kw___CoroC_Async_Call: {
+    SourceLocation AsyncLoc = ConsumeToken();
+    if (!getLangOpts().CoroC) {
+      Diag(AsyncLoc, diag::err_coro_disable);
+      SkipUntil(tok::semi, StopAtSemi);
+      return ExprError();
+    }
+    // try to parse the call expression
+    ExprResult CE = ParseCastExpression(false);
+    if (CE.isInvalid()) return ExprError();
+    return Actions.ActOnCoroCAsyncCallExpr(AsyncLoc, CE.get());
   }
 
   // postfix-expression:
