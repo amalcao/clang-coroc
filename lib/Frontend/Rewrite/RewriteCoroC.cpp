@@ -782,7 +782,7 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
 
   /// Generate the cleanup callback declaration:
   RH << Endl << "static int __thunk_cleanup_" << ThunkUID << "("
-     << "struct __thunk_struct_" << ThunkUID << " *_arg) {" << Endl;
+     << "struct __thunk_struct_" << ThunkUID << " *_arg, int _ret) {" << Endl;
 
   // Generate the func body:
   
@@ -795,12 +795,12 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
   // 2.2. join to the given group
   if (isGroupOp)
     RH << Indentation 
-       << "__CoroC_Notify(_arg->_group);" << Endl;
+       << "__CoroC_Notify(_arg->_group, _ret);" << Endl;
 
   // 2.3. release the _arg and quit
-  RH << Indentation << "if (_arg) free(_arg);" << Endl;
+  RH << Indentation << "free(_arg);" << Endl;
  
-  RH << Indentation << "return 0;" << Endl;
+  RH << Indentation << "return _ret;" << Endl;
   RH << "}" << Endl;
 }
 
@@ -1457,11 +1457,11 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
     Thunk->GetCleanupName(cleanupName);
 
     // arg0 : entry function handler
-    RH << "((__CoroC_spawn_handler_t)" << funcName << ", ";
+    RH << "((__CoroC_spawn_entry_t)" << funcName << ", ";
     // arg1 : param pointer
     RH << paramName.str() << ", ";
     // arg2 : cleanup function handler
-    RH << "(__CoroC_spawn_handler_t)" << cleanupName << ");";
+    RH << "(__CoroC_spawn_cleanup_t)" << cleanupName << ");";
     
     RH << Endl << "}";
 

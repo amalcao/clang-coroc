@@ -44,6 +44,9 @@
 //  SJ -> sigjmp_buf
 //  K -> ucontext_t
 //  p -> pid_t
+//  t -> __task_t
+//  r -> __chan_t
+//  g -> __group_t
 //  . -> "...".  This may only occur at the end of the function list.
 //
 // Types may be prefixed with the following modifiers:
@@ -1190,7 +1193,7 @@ LIBBUILTIN(__CoroC_Now, "ULLi", "i", "libcoroc.h", COROC_LANG)
 LIBBUILTIN(__CoroC_Sleep, "vULLi", "i", "libcoroc.h", COROC_LANG)
 
 LIBBUILTIN(__CoroC_Group, "g", "i", "libcoroc.h", COROC_LANG)
-LIBBUILTIN(__CoroC_Sync, "vg", "i", "libcoroc.h", COROC_LANG)
+LIBBUILTIN(__CoroC_Sync, "ig", "i", "libcoroc.h", COROC_LANG)
 
 // Annotation function
 BUILTIN(__builtin_annotation, "v.", "tn")
