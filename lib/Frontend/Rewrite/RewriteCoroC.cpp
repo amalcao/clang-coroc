@@ -161,7 +161,7 @@ class SelectHelper {
   bool HasDefault;
   bool SimpleWay;
 
-  RewriteHelper Prologue, Epilogue;
+  RewriteHelper Prologue;
   std::map<unsigned, Expr*> AutoRefMap;
   std::vector<CoroCCaseStmt*> CaseStmtSet; 
 
@@ -193,7 +193,7 @@ public:
                SourceLocation EL, unsigned Num, bool hasDef)
       : Context(Ctx), Rewrite(R), SelUID(UID), StartLoc(SL), EndLoc(EL),
         CaseNum(Num), CurPos(0), HasDefault(hasDef), SimpleWay(false),
-        Prologue(&R), Epilogue(&R) {
+        Prologue(&R) {
     if (CaseNum == 1 || (CaseNum == 2 && HasDefault))
       SimpleWay = true;
   }
@@ -204,7 +204,6 @@ public:
                << "__chan_t __select_result_" 
                << SelUID << " = __CoroC_Select(__select_set_" 
                << SelUID << ", " << !HasDefault << ");" << Endl;
-      Epilogue.InsertText(EndLoc, false);
     } 
 
     Prologue.InsertTextAfterToken(StartLoc);
@@ -230,11 +229,9 @@ public:
 
     int num = HasDefault ? CaseNum - 1 : CaseNum;
     Prologue << Indentation << "__select_set_t __select_set_" 
-             << SelUID << " = __CoroC_Select_Alloc(" << num << ");" << Endl;
-
-    Epilogue << Indentation 
-             << "__CoroC_Select_Dealloc(__select_set_" 
-             << SelUID << ");" << Endl;
+             << SelUID << " = __CoroC_Select_Alloc(" << num << ");" << Endl
+             << Indentation << "__CoroC_Select_Init(__select_set_" << SelUID 
+             << ", " << num << ");" << Endl; 
   }
 
   void InsertCaseInitialization(BinaryOperator *BO) {
