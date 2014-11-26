@@ -123,10 +123,6 @@ static bool DiagnoseUnusedComparison(Sema &S, const Expr *E) {
   SourceLocation Loc;
   bool IsNotEqual, CanAssign, IsRelational;
 
-  /* we can ignore the result of __CoroC_Spawn sometimes */
-  if (dyn_cast<CoroCSpawnCallExpr>(E)) 
-    return true;
-
   if (const BinaryOperator *Op = dyn_cast<BinaryOperator>(E)) {
     if (!Op->isComparisonOp())
       return false;
@@ -224,6 +220,13 @@ void Sema::DiagnoseUnusedExprResult(const Stmt *S) {
     return;
 
   E = WarnExpr;
+
+  // If the expr is "__CoroC_Async_Call func(...)",
+  // just check if the "func(...)" should return a value.
+  if (const CoroCAsyncCallExpr *AE = dyn_cast<CoroCAsyncCallExpr>(E)) {
+    E = AE->getCallExpr();
+  }
+
   if (const CallExpr *CE = dyn_cast<CallExpr>(E)) {
     if (E->getType()->isVoidType())
       return;

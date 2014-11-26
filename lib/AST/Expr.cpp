@@ -1974,6 +1974,11 @@ bool Expr::isUnusedResultAWarning(const Expr *&WarnE, SourceLocation &Loc,
     Loc = getExprLoc();
     R1 = getSourceRange();
     return true;
+  case CoroCSpawnCallExprClass:
+    return false;
+  case CoroCAsyncCallExprClass:
+    return cast<CoroCAsyncCallExpr>(this)->getCallExpr()->
+      isUnusedResultAWarning(WarnE, Loc, R1, R2, Ctx);
   case ParenExprClass:
     return cast<ParenExpr>(this)->getSubExpr()->
       isUnusedResultAWarning(WarnE, Loc, R1, R2, Ctx);
@@ -2885,6 +2890,7 @@ bool Expr::HasSideEffects(const ASTContext &Ctx) const {
   case ObjCBoolLiteralExprClass:
   case CXXUuidofExprClass:
   case OpaqueValueExprClass:
+  case CoroCNullExprClass:
     // These never have a side-effect.
     return false;
 
@@ -2904,6 +2910,9 @@ bool Expr::HasSideEffects(const ASTContext &Ctx) const {
   case CXXBindTemporaryExprClass:
   case BlockExprClass:
   case CUDAKernelCallExprClass:
+  case CoroCSpawnCallExprClass:
+  case CoroCMakeChanExprClass:
+  case CoroCAsyncCallExprClass:
     // These always have a side-effect.
     return true;
 
