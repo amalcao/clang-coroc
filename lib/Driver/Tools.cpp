@@ -445,6 +445,10 @@ void Clang::AddPreprocessingOptions(Compilation &C,
   if (types::isCXX(Inputs[0].getType()))
     getToolChain().AddClangCXXStdlibIncludeArgs(Args, CmdArgs);
 
+  // Add CoroC default include path
+  if (Inputs[0].getType() == types::TY_CoroC)
+    addDirectoryList(Args, CmdArgs, "-I", "COROC_INCLUDE_PATH");
+
   // Add system include arguments.
   getToolChain().AddClangSystemIncludeArgs(Args, CmdArgs);
 }
