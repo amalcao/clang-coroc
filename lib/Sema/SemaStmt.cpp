@@ -2457,7 +2457,8 @@ Sema::ActOnCoroCCaseOrDefaultStmt(SourceLocation CaseLoc, Expr *E, Stmt *Body) {
     assert (P != nullptr);
 
     BinaryOperator *BinOp = dyn_cast<BinaryOperator>(P->getSubExpr());
-    if (BinOp == nullptr || BinOp->getLHS()->getType() != Context.ChanRefTy) 
+    if (BinOp == nullptr || 
+        BinOp->getLHS()->getType().getCanonicalType() != Context.ChanRefTy) 
       return StmtError(Diag(CaseLoc, diag::err_case_op_not_chan_ops));
   }
 

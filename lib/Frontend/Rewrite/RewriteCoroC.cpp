@@ -64,12 +64,15 @@ static void GetChanFuncname(ASTContext &Ctx, Expr *RHS, unsigned Opc,
                             std::string &funcName, 
                             bool &usePtr, bool isAutoRef = false,
                             bool sel = false, bool nonBlock = false) {
-  bool isNil = (dyn_cast<CoroCNullExpr>(RHS) != nullptr);
+  bool isNullExpr = isa<CoroCNullExpr>(RHS);
   funcName = sel ? "__CoroC_Select_" : "__CoroC_Chan_";
 
   // FIXME : use a better way to get if the address of the RHS expr
   // can be caluculated by the '&' operator.
-  usePtr = !isNil && (RHS->isModifiableLvalue(Ctx, nullptr) == Expr::MLV_Valid);
+  if (isNullExpr)
+    usePtr = false;
+  else
+    usePtr = (RHS->isModifiableLvalue(Ctx, nullptr) == Expr::MLV_Valid);
 
   if (Opc == BO_Shr)
     funcName += "Recv";
@@ -77,7 +80,7 @@ static void GetChanFuncname(ASTContext &Ctx, Expr *RHS, unsigned Opc,
     funcName += "Send";
     if (isAutoRef)
       funcName += "Ref";
-    else if (!usePtr)
+    else if (!isNullExpr && !usePtr)
       funcName += "Expr";
   }
 
@@ -248,7 +251,7 @@ public:
       AutoRefMap[CurPos] = RHS;
 
     if (SimpleWay)
-      Prologue << Indentation << "bool __select_result_" 
+      Prologue << Indentation << "_Bool __select_result_" 
                << SelUID << " = " << FuncName << "(";
     else
       Prologue << Indentation << FuncName 
