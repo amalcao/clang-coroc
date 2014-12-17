@@ -1570,7 +1570,7 @@ public:
 
   static bool adjustContextForLocalExternDecl(DeclContext *&DC);
   void DiagnoseFunctionSpecifiers(const DeclSpec &DS);
-  void CheckChanDecl(NamedDecl *D, QualType Ty, const DeclSpec &DS);
+  void CheckRefDecl(NamedDecl *D, QualType Ty, const DeclSpec &DS);
   void CheckShadow(Scope *S, VarDecl *D, const LookupResult& R);
   void CheckShadow(Scope *S, VarDecl *D);
   void CheckCastAlign(Expr *Op, QualType T, SourceRange TRange);
@@ -3111,6 +3111,9 @@ public:
                                     ParsedType T, Expr *E);
 
   ExprResult ActOnCoroCAsyncCallExpr(SourceLocation AsyncLoc, Expr *E);
+  ExprResult ActOnCoroCNewExpr(SourceLocation NewLoc,
+                               SourceLocation GTLoc,
+                               ParsedType T, Expr *SE, Expr *FE);
 
   StmtResult ActOnCoroCCaseOrDefaultStmt(SourceLocation CaseLoc, 
   										 Expr *E, Stmt *Body);

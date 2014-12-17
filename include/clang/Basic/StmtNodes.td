@@ -188,6 +188,7 @@ def CoroCSpawnCallExpr : DStmt<Expr>;
 def CoroCMakeChanExpr : DStmt<Expr>;
 def CoroCNullExpr : DStmt<Expr>;
 def CoroCAsyncCallExpr : DStmt<Expr>;
+def CoroCNewExpr : DStmt<Expr>;
 
 // OpenMP Directives.
 def OMPExecutableDirective : Stmt<1>;

@@ -7565,8 +7565,8 @@ QualType Sema::CheckChanOperands(ExprResult &LHS, ExprResult &RHS,
       // Check if the type of RHS is equal to the channel elements' type!
 	  ValueDecl *VD = Collector[0];
 
-      if (VD->isChanDecl()) {
-        QualType LHSType = VD->getChanElemType();
+      if (VD->isRefDecl()) {
+        QualType LHSType = VD->getRefElemType();
         if (LHSType.isNull() || isNil) {
           if (!isNil && (RHSType == Context.VoidTy))
             return InvalidOperands(Loc, LHS, RHS);
@@ -9037,6 +9037,17 @@ static void diagnoseAddressOfInvalidType(Sema &S, SourceLocation Loc,
 /// In C++, the operand might be an overloaded function name, in which case
 /// we allow the '&' but retain the overloaded-function type.
 QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
+  if (getLangOpts().CoroC) {
+    Expr *E = OrigOp.get()->IgnoreParens();
+    if (E->getType() == Context.GeneralRefTy) {
+      DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E);
+      assert(DE != nullptr);
+      ValueDecl *VD = DE->getDecl();
+      if (VD->isRefDecl())
+        return Context.getPointerType(VD->getRefElemType());
+    }
+  }
+
   if (const BuiltinType *PTy = OrigOp.get()->getType()->getAsPlaceholderType()){
     if (PTy->getKind() == BuiltinType::Overload) {
       Expr *E = OrigOp.get()->IgnoreParens();
@@ -13672,6 +13683,64 @@ Sema::ActOnObjCBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind) {
     BoolT = Context.getBOOLType();
   return new (Context)
       ObjCBoolLiteralExpr(Kind == tok::kw___objc_yes, BoolT, OpLoc);
+}
+
+/// ActOnCoroCNewExpr - Parse __CoroC_New
+ExprResult
+Sema::ActOnCoroCNewExpr(SourceLocation NewLoc, SourceLocation GTLoc,
+                        ParsedType Ty, Expr *SE, Expr *FE) {
+  // check if this expr is called in a valid scope
+  if (FunctionScopes.size() < 1 ||
+      getCurFunction()->CompoundScopes.size() < 1) {
+    Diag(NewLoc, diag::err_new_invalid_scope);
+    return ExprError();
+  }
+
+  TypeSourceInfo *TSInfo = nullptr;
+  QualType T = GetTypeFromParser(Ty, &TSInfo);
+
+  // check if the SIZE field is valid 
+  if (SE != nullptr && 
+      !(SE->getType()->isIntegerType())) {
+    Diag(NewLoc, diag::err_new_invalid_size_param);
+    return ExprError();
+  }
+
+  // check if the Fini field is valid
+  if (FE != nullptr) {
+    // The user defined destructor is only for user defined
+    // types -- stuctures and unions in C.
+    if (!T->isStructureType()) {
+      Diag(NewLoc, diag::err_new_unexpect_fini_param);
+      return ExprError();
+    }
+      
+    bool hasError = (dyn_cast<DeclRefExpr>(FE) == nullptr);
+                    
+    // FE's type must be function or function pointer!! 
+    if (!hasError) {
+      QualType FTy = FE->getType();
+      if (! FTy->isFunctionType() ) {
+        // not a function, check if a function pointer
+        if (FTy->isPointerType()) {
+          FTy = FTy->getPointeeType();
+          hasError = ! FTy->isFunctionType();
+        } else {
+          hasError = true;
+        }
+      }
+    }
+    // TODO: check the params' type of the function!
+
+    if (hasError) {
+      Diag(NewLoc, diag::err_new_invalid_fini_param);
+      return ExprError();
+    }
+  }
+  
+  return new (Context) CoroCNewExpr(NewLoc, GTLoc, 
+                                    Context.GeneralRefTy, 
+                                    T, SE, FE);
 }
 
 /// ActOnCoroCSpawnCallExpr - Parse __CoroC_Spawn

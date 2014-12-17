@@ -1605,55 +1605,61 @@ void ASTStmtWriter::VisitAsTypeExpr(AsTypeExpr *E) {
 //===----------------------------------------------------------------------===//
 // CoroC Expressions and Statements.
 //===----------------------------------------------------------------------===//
+void ASTStmtWriter::VisitCoroCNewExpr(CoroCNewExpr *E) {
+  VisitExpr(E);
+  Writer.AddSourceLocation(E->getLocStart(), Record);
+  Code = serialization::EXPR_COROC_NEW; 
+}
+
 void ASTStmtWriter::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
-    VisitExpr(E);
-    Writer.AddStmt(E->getCallExpr());
-    Writer.AddSourceLocation(E->getLocStart(), Record);
-    Code = serialization::EXPR_COROC_SPAWN;
+  VisitExpr(E);
+  Writer.AddStmt(E->getCallExpr());
+  Writer.AddSourceLocation(E->getLocStart(), Record);
+  Code = serialization::EXPR_COROC_SPAWN;
 }
 
 void ASTStmtWriter::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
-    VisitExpr(E);
-    if (E->getCapExpr())
-        Writer.AddStmt(E->getCapExpr());
-    Writer.AddSourceLocation(E->getLocStart(), Record);
-    Code = serialization::EXPR_COROC_CHAN;
+  VisitExpr(E);
+  if (E->getCapExpr())
+      Writer.AddStmt(E->getCapExpr());
+  Writer.AddSourceLocation(E->getLocStart(), Record);
+  Code = serialization::EXPR_COROC_CHAN;
 }
 
 void ASTStmtWriter::VisitCoroCNullExpr(CoroCNullExpr *E) {
-    VisitExpr(E);
-    Writer.AddSourceLocation(E->getLocStart(), Record); 
-    Code = serialization::EXPR_COROC_NULL;
+  VisitExpr(E);
+  Writer.AddSourceLocation(E->getLocStart(), Record); 
+  Code = serialization::EXPR_COROC_NULL;
 }
 
 void ASTStmtWriter::VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
-    VisitExpr(E);
-    Writer.AddSourceLocation(E->getLocStart(), Record);
-    Code = serialization::EXPR_COROC_ASYNC_CALL;
+  VisitExpr(E);
+  Writer.AddSourceLocation(E->getLocStart(), Record);
+  Code = serialization::EXPR_COROC_ASYNC_CALL;
 }
 
 void ASTStmtWriter::VisitCoroCYieldStmt(CoroCYieldStmt *S) {
-    VisitStmt(S);
-    Writer.AddSourceLocation(S->getYieldLoc(), Record);
-    Code = serialization::STMT_COROC_YIELD;
+  VisitStmt(S);
+  Writer.AddSourceLocation(S->getYieldLoc(), Record);
+  Code = serialization::STMT_COROC_YIELD;
 }
 
 void ASTStmtWriter::VisitCoroCQuitStmt(CoroCQuitStmt *S) {
-    VisitStmt(S);
-    Writer.AddSourceLocation(S->getQuitLoc(), Record);
-    Code = serialization::STMT_COROC_QUIT;
+  VisitStmt(S);
+  Writer.AddSourceLocation(S->getQuitLoc(), Record);
+  Code = serialization::STMT_COROC_QUIT;
 }
 
 void ASTStmtWriter::VisitCoroCCaseStmt(CoroCCaseStmt *S) {
-	VisitStmt(S);
-	Writer.AddSourceLocation(S->getCaseOrDefaultLoc(), Record);
-	Code = serialization::STMT_COROC_CASE;
+  VisitStmt(S);
+  Writer.AddSourceLocation(S->getCaseOrDefaultLoc(), Record);
+  Code = serialization::STMT_COROC_CASE;
 }
 
 void ASTStmtWriter::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
-	VisitStmt(S);
-	Writer.AddSourceLocation(S->getSelectLoc(), Record);
-	Code = serialization::STMT_COROC_SELECT;
+  VisitStmt(S);
+  Writer.AddSourceLocation(S->getSelectLoc(), Record);
+  Code = serialization::STMT_COROC_SELECT;
 }
 
 

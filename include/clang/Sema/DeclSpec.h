@@ -350,7 +350,7 @@ private:
     Expr *ExprRep;
   };
 
-  ParsedType ChanElemTy;
+  ParsedType RefElemTy;
 
   // attributes.
   ParsedAttributes Attrs;
@@ -644,11 +644,11 @@ public:
                        const PrintingPolicy &Policy);
   bool SetTypeSpecError();
 
-  void SetChanElemType(ParsedType Ty) {
-    ChanElemTy = Ty;
+  void SetRefElemType(ParsedType Ty) {
+    RefElemTy = Ty;
   }
-  void GetChanElemType(ParsedType &Ty) const {
-    Ty = ChanElemTy;
+  void GetRefElemType(ParsedType &Ty) const {
+    Ty = RefElemTy;
   }
 
   void UpdateDeclRep(Decl *Rep) {

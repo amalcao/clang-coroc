@@ -2415,15 +2415,16 @@ Parser::DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
   return false;
 }
  
-/// ParseCoroCChanDeclaration
+/// ParseCoroCRefDeclaration
 ///     __chan_t chan or __chan_t<typename> chan
-void Parser::ParseCoroCChanDeclaration(DeclSpec &DS) {
+///     __refcnt_t ptr or __refcnt_t<typename> ptr
+void Parser::ParseCoroCRefDeclaration(DeclSpec &DS) {
   // Match '<' or return 
   Token Next = NextToken();
   if (Next.getKind() != tok::less) 
     return;
 
-  // eat the '__chan_t'
+  // eat the '__chan_t' or '__refcnt_t'
   ConsumeToken(); 
   // eat '<' and parse the typename
   ConsumeToken();
@@ -2437,7 +2438,7 @@ void Parser::ParseCoroCChanDeclaration(DeclSpec &DS) {
   }
   
   // record the element type 
-  DS.SetChanElemType(Ty.get());
+  DS.SetRefElemType(Ty.get());
 }
 
 /// ParseDeclarationSpecifiers
@@ -3117,11 +3118,12 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     case tok::kw___chan_t:
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_chan_t, Loc, PrevSpec,
                                      DiagID, Policy);
-      ParseCoroCChanDeclaration(DS);
+      ParseCoroCRefDeclaration(DS);
       break;
     case tok::kw___refcnt_t:
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_refcnt_t, Loc, PrevSpec,
                                      DiagID, Policy);
+      ParseCoroCRefDeclaration(DS);
       break;
 
     case tok::kw___group_t:

@@ -2270,6 +2270,7 @@ DEF_TRAVERSE_STMT(ObjCDictionaryLiteral, {})
 DEF_TRAVERSE_STMT(AsTypeExpr, {})
 
 // CoroC statements and expressions
+DEF_TRAVERSE_STMT(CoroCNewExpr, {})
 DEF_TRAVERSE_STMT(CoroCSpawnCallExpr, { 
     TRY_TO(TraverseStmt(S->getCallExpr())); })
 DEF_TRAVERSE_STMT(CoroCMakeChanExpr, { 

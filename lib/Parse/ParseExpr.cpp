@@ -1253,6 +1253,57 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
                                           Ty.get(), Expr.get());
   }
 
+  // postfix-expression:
+  //    __CoroC_New '<' type-specifier[, expression, expression] '>'
+  case tok::kw___CoroC_New: {
+    SourceLocation NewLoc = ConsumeToken();
+    if (!getLangOpts().CoroC) {
+      Diag(NewLoc, diag::err_coro_disable);
+      SkipUntil(tok::semi, StopAtSemi);
+      return ExprError();
+    }
+
+    // match the '<'
+    if (ExpectAndConsume(tok::less)) {
+        SkipUntil(tok::semi, StopAtSemi);
+        return ExprError();
+    }
+
+    SourceRange TySrcRange;
+    TypeResult Ty = ParseTypeName(&TySrcRange);
+    ExprResult SubExprs[2];
+    
+    for (unsigned i = 0; i < 2; ++i) {
+      // try to match ','
+      tok::TokenKind T = Tok.getKind();
+
+      if (T != tok::comma) break;
+      
+      ConsumeToken();
+      bool Backup = GreaterThanIsOperator;
+      GreaterThanIsOperator = false;
+      SubExprs[i] = ParseCastExpression(false);
+      GreaterThanIsOperator = Backup;
+
+      if (SubExprs[i].isInvalid()) 
+        return ExprError();
+    }
+
+    // match '>'
+    if (Tok.getKind() != tok::greater) {
+        ExpectAndConsume(tok::greater);
+        SkipUntil(tok::semi, StopAtSemi);
+        return ExprError();
+    }
+
+    return Actions.ActOnCoroCNewExpr(NewLoc, 
+                                     ConsumeToken(), // '>'
+                                     Ty.get(), 
+                                     SubExprs[0].get(),
+                                     SubExprs[1].get());
+  }
+
+
   case tok::l_square:
     if (getLangOpts().CPlusPlus11) {
       if (getLangOpts().ObjC1) {

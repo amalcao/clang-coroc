@@ -1762,7 +1762,7 @@ private:
                         AccessSpecifier AS, DeclSpecContext DSC, 
                         ParsedAttributesWithRange &Attrs);
   DeclSpecContext getDeclSpecContextFromDeclaratorContext(unsigned Context);
-  void ParseCoroCChanDeclaration(DeclSpec &DS);
+  void ParseCoroCRefDeclaration(DeclSpec &DS);
   void ParseDeclarationSpecifiers(DeclSpec &DS,
                 const ParsedTemplateInfo &TemplateInfo = ParsedTemplateInfo(),
                                   AccessSpecifier AS = AS_none,

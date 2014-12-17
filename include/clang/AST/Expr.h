@@ -4556,6 +4556,93 @@ public:
   child_range children() { return child_range(); }
 };
 
+/// \brief CoroCNewExpr - for __CoroC_New keyword
+class CoroCNewExpr : public Expr {
+  enum {
+    TheSizeExpr = 0,
+    TheFiniExpr,
+    NumSubExprs
+  };
+
+  QualType ElemType;
+  Stmt *SubExprs[NumSubExprs];
+  SourceLocation NewLoc;
+  SourceLocation EndLoc;
+
+  friend class ASTStmtReader;
+public:
+  CoroCNewExpr(SourceLocation SL, 
+               SourceLocation EL,
+               QualType T, QualType ET,
+               Expr *SE, Expr *FE)
+    : Expr(CoroCNewExprClass, T, VK_RValue,
+           OK_Ordinary, false, false, false, false)
+    , ElemType(ET), NewLoc(SL), EndLoc(EL) { 
+      SubExprs[TheSizeExpr] = SE;
+      SubExprs[TheFiniExpr] = FE;
+    }
+
+  /// \brief Build an empty block expression
+  explicit CoroCNewExpr(EmptyShell Empty)
+    : Expr(CoroCNewExprClass, Empty) { }
+
+  QualType getElemType() const {
+    return ElemType;
+  }
+
+  void setElemType(QualType Ty) {
+    ElemType = Ty;
+  }
+
+  const Expr* getSizeExpr() const { 
+    if (SubExprs[TheSizeExpr] != nullptr)
+      return cast<Expr>(SubExprs[TheSizeExpr]); 
+    else
+      return nullptr;
+  }
+  Expr* getSizeExpr() { 
+    if (SubExprs[TheSizeExpr] != nullptr)
+      return cast<Expr>(SubExprs[TheSizeExpr]);
+    else
+      return nullptr;
+  }
+  void setSizeExpr(Expr *E) { 
+    SubExprs[TheSizeExpr] = E; 
+  }
+
+  const Expr* getFiniExpr() const {
+    if (SubExprs[TheFiniExpr] != nullptr)
+      return cast<Expr>(SubExprs[TheFiniExpr]); 
+    else
+      return nullptr;
+  }
+  Expr* getFiniExpr() { 
+    if (SubExprs[TheFiniExpr] != nullptr)
+      return cast<Expr>(SubExprs[TheFiniExpr]); 
+    else
+      return nullptr;
+  }
+  void setFiniExpr(Expr *E) { 
+    SubExprs[TheFiniExpr] = E; 
+  }
+
+  SourceLocation getLocStart() const LLVM_READONLY {
+    return NewLoc;
+  }
+  SourceLocation getLocEnd() const LLVM_READONLY {
+    return EndLoc;
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == CoroCNewExprClass;
+  }
+
+  child_range children() {
+    return child_range(SubExprs, SubExprs + NumSubExprs); 
+  }
+
+};
+
 /// \brief CoroCSpawnCallExpr - for __CoroC_Spawn keyword
 class CoroCSpawnCallExpr : public Expr {
     CallExpr *TheCallExpr;

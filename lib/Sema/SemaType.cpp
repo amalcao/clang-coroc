@@ -1070,7 +1070,9 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
   case DeclSpec::TST_group_t:
     Result = Context.GroupTy;
     break;
-  // TODO: case DeclSpec::TST_refcnt_t: ...
+  case DeclSpec::TST_refcnt_t:
+    Result = Context.GeneralRefTy;
+    break;
 
   case DeclSpec::TST_error:
     Result = Context.IntTy;

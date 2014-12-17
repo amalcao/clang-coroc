@@ -109,25 +109,25 @@ class NamedDecl : public Decl {
   /// constructor, Objective-C selector, etc.)
   DeclarationName Name;
 
-  QualType ChanElemType;
-  bool ChanDecl;
+  QualType RefElemType;
+  bool RefDecl;
 
 public:
 
-  /// \brief The elements' type if it is a CoroC channel.
-  QualType getChanElemType() const { return ChanElemType; }
-  void setChanElemType(QualType Ty) { ChanElemType = Ty; }
+  /// \brief The elements' type if it is a CoroC __chan_t / __refcnt_t.
+  QualType getRefElemType() const { return RefElemType; }
+  void setRefElemType(QualType Ty) { RefElemType = Ty; }
 
-  /// \brief Determine whether this decl is the CoroC channel.
-  void setChanDecl() { ChanDecl = true; }
-  bool isChanDecl() { return ChanDecl; }
+  /// \brief Determine whether this decl is the CoroC __chan_t / __refcnt_t.
+  void setRefDecl() { RefDecl = true; }
+  bool isRefDecl() { return RefDecl; }
 
 private:
   NamedDecl *getUnderlyingDeclImpl() LLVM_READONLY;
 
 protected:
   NamedDecl(Kind DK, DeclContext *DC, SourceLocation L, DeclarationName N)
-    : Decl(DK, DC, L), Name(N), ChanDecl(false) { }
+    : Decl(DK, DC, L), Name(N), RefDecl(false) { }
 
 public:
   /// getIdentifier - Get the identifier that names this declaration,

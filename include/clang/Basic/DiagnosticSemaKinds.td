@@ -7242,6 +7242,16 @@ def err_chan_not_init : Error<
 def warn_use_chan_without_typecheck : Warning<
     "using a chan without a elements' type declaration">;
 
+// __CoroC_New
+def err_new_invalid_scope : Error<
+    "__CoroC_New not allowed in this scope">;
+def err_new_invalid_size_param : Error<
+    "the second param of __CoroC_New must be an integar typed expr">;
+def err_new_unexpect_fini_param : Error<
+    "cannot add user-defined destructor for builtin or basic types">;
+def err_new_invalid_fini_param : Error<
+    "the third param of __CoroC_New must be a function pointer">;
+
 // __CoroC_Yield
 //  TODO
 

@@ -2149,6 +2149,20 @@ void StmtPrinter::VisitAsTypeExpr(AsTypeExpr *Node) {
 //===----------------------------------------------------------------------===//
 // for CoroC stmts and exprs 
 //===----------------------------------------------------------------------===//
+void StmtPrinter::VisitCoroCNewExpr(CoroCNewExpr *E) {
+  OS << "__CoroC_New <";
+  E->getElemType().print(OS, Policy);
+  if (E->getSizeExpr() != nullptr) {
+    OS << ", ";
+    PrintExpr(E->getSizeExpr());
+  }
+  if (E->getFiniExpr() != nullptr) {
+    OS << ", ";
+    PrintExpr(E->getFiniExpr());
+  }
+  OS << ">";
+}
+
 void StmtPrinter::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
   OS << "__CoroC_Spawn ";
   CallExpr *Call = E->getCallExpr();

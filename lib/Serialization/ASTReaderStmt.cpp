@@ -1691,6 +1691,11 @@ void ASTStmtReader::VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
   llvm_unreachable("not implemented yet");
 }
 
+
+void ASTStmtReader::VisitCoroCNewExpr(CoroCNewExpr *E) {
+  llvm_unreachable("not implemented yet");
+}
+
 //===----------------------------------------------------------------------===//
 // OpenMP Clauses.
 //===----------------------------------------------------------------------===//

@@ -10445,7 +10445,11 @@ TreeTransform<Derived>::TransformCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
   llvm_unreachable("Cannot transform CoroCAsyncCallExpr now");
 }
 
-
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformCoroCNewExpr(CoroCNewExpr *E) {
+  llvm_unreachable("Cannot transform CoroCNewExpr now");
+}
 } // end namespace clang
 
 #endif // LLVM_CLANG_SEMA_TREETRANSFORM_H

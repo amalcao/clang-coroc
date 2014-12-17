@@ -4784,7 +4784,7 @@ Sema::ActOnTypedefDeclarator(Scope* S, Declarator& D, DeclContext* DC,
   bool Redeclaration = D.isRedeclaration();
   NamedDecl *ND = ActOnTypedefNameDecl(S, DC, NewTD, Previous, Redeclaration);
   D.setRedeclaration(Redeclaration);
-  CheckChanDecl(ND, TInfo->getType(), D.getDeclSpec());
+  CheckRefDecl(ND, TInfo->getType(), D.getDeclSpec());
 
   return ND;
 }
@@ -5285,7 +5285,9 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   if (R->isArrayType())
 	BaseTy = Context.getBaseElementType(R);
   if (getLangOpts().CoroC) {
-    if (BaseTy == Context.TaskRefTy || BaseTy == Context.ChanRefTy) {
+    if (BaseTy == Context.TaskRefTy || 
+        BaseTy == Context.ChanRefTy ||
+        BaseTy == Context.GeneralRefTy) {
       // The `__task_t' and `__chan_t' cannot have any specifiers!!
       if (SC != SC_None) {
         Diag(D.getDeclSpec().getStorageClassSpecLoc(), 
@@ -5344,7 +5346,7 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       NewVD->setInvalidDecl();
 	
 	// Check if it is a CoroC Chan decl
-	CheckChanDecl(NewVD, BaseTy, D.getDeclSpec());
+	CheckRefDecl(NewVD, BaseTy, D.getDeclSpec());
   } else {
     bool Invalid = false;
 
@@ -8310,14 +8312,14 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init,
   }
   
   // Check if this is a CoroC Chan Decl & Init pair
-  if (VDecl->isChanDecl()) {
+  if (VDecl->getType() == Context.ChanRefTy) {
     CoroCMakeChanExpr *CE = dyn_cast<CoroCMakeChanExpr>(Init);
     if (CE != nullptr) {
-      QualType OldType = VDecl->getChanElemType();
+      QualType OldType = VDecl->getRefElemType();
       QualType NewType = CE->getElemType();
 
       if (OldType.isNull() || OldType == Context.VoidTy) {
-        VDecl->setChanElemType(NewType);
+        VDecl->setRefElemType(NewType);
       } else {
         // Check if two types are same
         OldType = Context.getCanonicalType(OldType).getUnqualifiedType();
@@ -9605,7 +9607,7 @@ Decl *Sema::ActOnParamDeclarator(Scope *S, Declarator &D) {
   }
 
   // Add the typename info into the CoroC channels' ValueDecl
-  CheckChanDecl(New, parmDeclType, DS);
+  CheckRefDecl(New, parmDeclType, DS);
   return New;
 }
 
@@ -11936,7 +11938,7 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
     Record->addDecl(NewFD);
 
   // Check if this field decl is a CoroC channel decl
-  CheckChanDecl(NewFD, T, D.getDeclSpec());
+  CheckRefDecl(NewFD, T, D.getDeclSpec());
 
   return NewFD;
 }
@@ -13624,8 +13626,8 @@ AvailabilityResult Sema::getCurContextAvailability() const {
   return D->getAvailability();
 }
 
-/// \brief Check if the current ValueDecl is CoroC channel decl
-void Sema::CheckChanDecl(NamedDecl *D, QualType T, const DeclSpec &DS) {
+/// \brief Check if the current ValueDecl is CoroC chan_t / refcnt_t decl
+void Sema::CheckRefDecl(NamedDecl *D, QualType T, const DeclSpec &DS) {
   QualType Ty = T.getCanonicalType(); // get the underlying type 
 
   if (Ty->isArrayType())
@@ -13635,26 +13637,27 @@ void Sema::CheckChanDecl(NamedDecl *D, QualType T, const DeclSpec &DS) {
 
   Ty = Ty.getCanonicalType();
 
-  if (!getLangOpts().CoroC || Ty != Context.ChanRefTy)
+  if (!getLangOpts().CoroC ||
+      (Ty != Context.ChanRefTy && Ty != Context.GeneralRefTy))
     return;
 
-  // Mark this decl as a CoroC channel decl
-  D->setChanDecl();
+  // Mark this decl as a CoroC chan_t / refcnt_t decl
+  D->setRefDecl();
   // Set the elements' type info of this channel decl
   TypeSourceInfo *TSInfo = nullptr;
   ParsedType PT;
-  DS.GetChanElemType(PT);
+  DS.GetRefElemType(PT);
 
   Ty = GetTypeFromParser(PT, &TSInfo);
   if (!Ty.isNull()) {
-    D->setChanElemType(Ty);
+    D->setRefElemType(Ty);
     return ;
   }
 
   const TypedefType* PTT = T->getAs<TypedefType>();
   if (PTT != nullptr) {
     TypedefNameDecl *TND = PTT->getDecl();
-    D->setChanElemType(TND->getChanElemType());
+    D->setRefElemType(TND->getRefElemType());
   }
   return;
 }

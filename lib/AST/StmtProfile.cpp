@@ -908,6 +908,10 @@ void StmtProfiler::VisitAsTypeExpr(const AsTypeExpr *S) {
 }
 
 // CoroC << 
+void StmtProfiler::VisitCoroCNewExpr(const CoroCNewExpr *E) {
+  VisitExpr(E);
+}
+
 void StmtProfiler::VisitCoroCSpawnCallExpr(const CoroCSpawnCallExpr *E) {
   VisitExpr(E);
 }

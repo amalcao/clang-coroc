@@ -1371,6 +1371,7 @@ namespace clang {
       EXPR_COROC_CHAN,
       EXPR_COROC_NULL,
       EXPR_COROC_ASYNC_CALL,
+      EXPR_COROC_NEW,
     };
 
     /// \brief The kinds of designators that can occur in a

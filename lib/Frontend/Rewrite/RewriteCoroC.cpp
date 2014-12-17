@@ -41,9 +41,9 @@ using llvm::utostr;
 
 namespace ict {
 /// \brief Check if the given type is CoroC auto-reference types.
-///        Now, only `__chan_t' and `__task_t'.
+///        Now, only `__chan_t', `__task_t' and `__refcnt_t'.
 static inline bool IsCoroCAutoRefType(ASTContext &Ctx, QualType T) {
-  return (T == Ctx.ChanRefTy || T == Ctx.TaskRefTy);
+  return (T == Ctx.ChanRefTy || T == Ctx.TaskRefTy || T == Ctx.GeneralRefTy);
 }
 
 /// \brief Check if the given Expr is a VarRefExpr and is the CoroC 
@@ -57,6 +57,42 @@ static bool IsCoroCAutoRefExpr(ASTContext &Ctx, Expr *E,
   /* record this DeclRefExpr pointer!! */
   if (DE) *DE = dyn_cast<DeclRefExpr>(E);
   return isa<DeclRefExpr>(E);
+}
+ 
+/// \brief Convert a given QualType to a unique string
+static inline std::string ConvertTypeToString(QualType Ty) {
+  std::string name = Ty.getAsString();
+  std::string::size_type pos = 0;
+
+  // find all the ' '/'['/']' to '_',
+  // e.g. 'struct AA' ==> 'struct_AA'
+  //      'int A[10]' ==> 'int_A_10_'
+  while ((pos = name.find_first_of(" []", pos)) != std::string::npos) {
+    name[pos++] = '_';
+  }
+  
+  // find all the '*' to 'P'
+  pos = 0;
+  while ((pos = name.find_first_of("*", pos)) != std::string::npos) {
+    name[pos++] = 'p';
+  }
+  return name;
+}
+
+/// \breif Get the FieldDecls inside the given structure type
+static void inline 
+GetRefDeclsInside(QualType Ty, std::vector<FieldDecl*> &Decls, ASTContext &Ctx) {
+  if (!Ty->isStructureType()) return;
+
+  const RecordType *RTy = Ty->getAsStructureType();
+  assert(RTy != nullptr);
+  RecordDecl *RD = RTy->getDecl();
+  
+  for (RecordDecl::field_iterator I = RD->field_begin();
+       I != RD->field_end(); ++I) {
+    if (IsCoroCAutoRefType(Ctx, (*I)->getType()))
+      Decls.push_back(*I);
+  }
 }
 
 /// \brief Get the runtime function name of the given channel operand
@@ -321,8 +357,11 @@ class CoroCRecursiveASTVisitor
   std::vector<ScopeHelper *> ScopeStack;
   std::map<LabelDecl *, ScopeHelper *> LabelScopeMap;
 
+  std::map<const Type*, bool> RefcntTypesMap;
+  std::vector<const Type*> RefcntTypesCache;
+
   Token getNextTok(SourceLocation CurLoc);
-  SourceLocation getNextTokLocStart(SourceLocation CurLoc);
+  SourceLocation getNextTokLocStart(SourceLocation CurLoc);  
 
   ThunkHelper *getOrCreateThunkHelper(CallExpr *CE, bool isGroupOp, 
                                       bool isAsync = false);
@@ -343,6 +382,8 @@ class CoroCRecursiveASTVisitor
 
   void AddDefaultInit(ValueDecl*, bool);
 
+  void AddRefcntType(const Type*);
+
 public:
   CoroCRecursiveASTVisitor(Rewriter &R, ASTContext *C)
       : Rewrite(R), Context(C), 
@@ -351,6 +392,8 @@ public:
   ~CoroCRecursiveASTVisitor();
 
   void DumpThunkHelpers(RewriteHelper&);
+
+  void DumpRefcntTypes(RewriteHelper&);
 
   void TraverseStmtWithoutScope(Stmt *S);
 
@@ -371,6 +414,7 @@ public:
   bool VisitGotoStmt(GotoStmt *S);
   bool VisitReturnStmt(ReturnStmt *S);
 
+  bool VisitCoroCNewExpr(CoroCNewExpr *E);
   bool VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E);
   bool VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E);
   bool VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E);
@@ -385,6 +429,9 @@ public:
   Expr *VisitBinaryOperator(BinaryOperator *B);
   Expr *VisitChanOperator(BinaryOperator *B, unsigned Opc);
   Expr *VisitAssignmentOperator(BinaryOperator *B);
+
+  Expr *VisitUnaryOperator(UnaryOperator *U);
+  Expr *VisitAddrOfOperator(UnaryOperator *U);
 
   bool HasMain() { return hasMain; }
 
@@ -841,6 +888,65 @@ void CoroCRecursiveASTVisitor::DumpThunkHelpers(RewriteHelper &RH) {
     (*it)->Dump(RH);
 }
 
+void CoroCRecursiveASTVisitor::AddRefcntType(const Type *Ty) {
+  if (!RefcntTypesMap[Ty]) {
+    RefcntTypesCache.push_back(Ty);
+    RefcntTypesMap[Ty] = true;
+  }
+}
+
+void CoroCRecursiveASTVisitor::DumpRefcntTypes(RewriteHelper &RH) {
+  std::vector<const Type *>::iterator it = RefcntTypesCache.begin();
+  for (; it != RefcntTypesCache.end(); ++it) {
+    const Type *ty = *it;
+    QualType QT = QualType(ty, 0);
+
+    bool isStructOrUnion = QT->isStructureType();
+
+    // dump the type definition
+    RH << "struct __refcnt_" << ConvertTypeToString(QT) << " {" << Endl;
+    RH << Indentation << "struct tsc_refcnt __refcnt;" << Endl;
+
+    if (isStructOrUnion) {
+      RH << Indentation << "void (*__user_fini)(" << QT << "*);" << Endl; // FIXME
+      RH << Indentation << "int __obj_num;" << Endl;
+    }
+
+    RH << Indentation << QT << " __obj[1];" << Endl;
+    RH << "};" << Endl << Endl; 
+    
+    // we don't add user-defined destoctors for basic or builtin types.
+    if (!isStructOrUnion) continue;
+
+    // dump the destructor of the new generated type
+    std::vector<FieldDecl*> Decls;
+    GetRefDeclsInside(QT, Decls, *Context);
+
+    RH << "static void __refcnt_" << ConvertTypeToString(QT) << "_fini("
+       << "struct __refcnt_" << ConvertTypeToString(QT) << "* __arg) {" << Endl;
+    
+    if (Decls.size() > 0) {
+      RH << Indentation << "int i;" << Endl
+         << Indentation << "for (i=0; i<__arg->__obj_num; ++i) {" << Endl;
+      for (unsigned i = 0; i < Decls.size(); ++i) {
+        ValueDecl *VD = Decls[i];
+        RH << Indentation << "  __refcnt_put(__arg->__obj[i]." << VD << ");" << Endl;
+      }
+      RH << Indentation << "}" << Endl;
+    }
+
+    // call the user defined fini ..
+    RH << Indentation << "if (__arg->__user_fini)" << Endl
+       << Indentation << "  __arg->__user_fini(&__arg->__obj[0]);" << Endl;
+
+    // call the free to release the memory ..
+    RH << Indentation << "free(__arg);" << Endl;
+
+    RH << "}" << Endl << Endl;
+  }
+  RefcntTypesCache.clear();
+}
+
 /// Get or Create a thunk helper for CoroC Spawn Call
 ThunkHelper *CoroCRecursiveASTVisitor::getOrCreateThunkHelper(CallExpr *C, 
                                                               bool isGroupOp,
@@ -1262,7 +1368,7 @@ void CoroCRecursiveASTVisitor::AddDefaultInit(ValueDecl *D, bool Simple) {
 
     Expr *Init = VD->getInit();
     if (!isa<CallExpr>(Init) && !isa<CoroCMakeChanExpr>(Init) &&
-        !isa<CoroCSpawnCallExpr>(Init)) {
+        !isa<CoroCSpawnCallExpr>(Init) && !isa<CoroCNewExpr>(Init)) {
       // need to add the refcnt of the init expr..
       Rewrite.InsertTextBefore(Init->getLocStart(), "__refcnt_get(");
       Rewrite.InsertTextAfterToken(Init->getLocEnd(), ")");
@@ -1298,6 +1404,12 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   // FIXME: This will cause the global vars cannot be added into any scope!!
   SourceLocation StartLoc = D->getSourceRange().getBegin();
   rewriteCoroCRefTypeName(StartLoc, BaseTy);
+  if (Ty == Context->GeneralRefTy) {
+    QualType RefType = D->getRefElemType();
+    AddRefcntType(RefType.getTypePtr());
+    std::string NewName = "struct __refcnt_" + ConvertTypeToString(RefType) + "*";
+    Rewrite.ReplaceText(StartLoc, 10, NewName.c_str());
+  }
 
   // NOTE: The `ParmVarDecl' will not be inserted into any scope!
   //       The caller will dec its counter when the function returns.
@@ -1343,6 +1455,29 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
     return VisitChanOperator(B, Opc);
   case BO_Assign:
     return VisitAssignmentOperator(B);
+  }
+}
+
+Expr *CoroCRecursiveASTVisitor::VisitAddrOfOperator(UnaryOperator *U) {
+  // __refcnt_t <T> ptr = ...;
+  // &(ptr)  ==> &((ptr)->_obj)
+  Expr *E = U->getSubExpr();
+  if (E->getType() == Context->GeneralRefTy) {
+    Rewrite.InsertTextBefore(E->getLocStart(), "(");
+    Rewrite.InsertTextAfterToken(E->getLocEnd(), "->__obj[0])");
+  }
+  return U;
+}
+
+/// Find and fix the unary operator expression.
+/// By now, wen just handle the CoroC refcnt addressing op.
+Expr *CoroCRecursiveASTVisitor::VisitUnaryOperator(UnaryOperator *U) {
+  unsigned Opc = U->getOpcode();
+  switch (Opc) {
+  default:
+    return U;
+  case UO_AddrOf:
+    return VisitAddrOfOperator(U);
   }
 }
 
@@ -1405,6 +1540,52 @@ Expr *CoroCRecursiveASTVisitor::VisitChanOperator(BinaryOperator *B,
   }
 
   return B;
+}
+
+/// Transform the __CoroC_New keyword
+bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
+  Expr *SizeExpr = E->getSizeExpr();
+  Expr *FiniExpr = E->getFiniExpr();
+  QualType Ty = E->getElemType();
+  // find the location of '<' and replace the text
+  SourceLocation Loc = getNextTokLocStart(E->getLocStart());
+
+  RewriteHelper RH(&Rewrite);
+  
+  if (Ty->isStructureType()) {
+    // Transform to runtime call:
+    //   __CoroC_New( __refcnt_Type_fini, __refcnt_Type, Type, 
+    //                size, (__CoroC_release_handler_t) fini )
+    RH << "(__refcnt_" << ConvertTypeToString(Ty) << "_fini, "
+       << "struct __refcnt_" << ConvertTypeToString(Ty) << ", ";
+    RH.ReplaceText(Loc);
+   
+    if (SizeExpr == nullptr) {
+      RH << ", 1, NULL)";
+      RH.ReplaceText(E->getLocEnd());
+    } else if (FiniExpr == nullptr) {
+      RH << ", NULL)";
+      RH.ReplaceText(E->getLocEnd());
+    } else {
+      Rewrite.InsertTextBefore(FiniExpr->getLocStart(), "(__CoroC_release_handler_t)");
+      Rewrite.ReplaceText(E->getLocEnd(), 1, ")");
+    }
+  } else {
+    // for builtin and basic types, no specific destructors.
+    //    __CoroC_New_Basic( __refcnt_Type, Type, size)
+    
+    RH << "__CoroC_New_Basic" 
+       << "(struct __refcnt_" << ConvertTypeToString(Ty) 
+       << ", " << Ty << ", ";
+
+    if (SizeExpr == nullptr)
+      RH << "1)";
+    else
+      RH << SizeExpr << ")";
+
+    RH.ReplaceText(E->getSourceRange());
+  }
+  return false;
 }
 
 /// Transform the __CoroC_Spawn keyword
@@ -1678,6 +1859,8 @@ bool RewriteCoroC::HandleTopLevelDecl(DeclGroupRef D) {
     Visitor->TraverseDecl(*I);
     // Dump the thunk helpers if any exist
     Visitor->DumpThunkHelpers(RH);
+    // Dump the wrapper types for auto refcnt
+    Visitor->DumpRefcntTypes(RH);
     RH.InsertText((*I)->getSourceRange().getBegin());
   }
 

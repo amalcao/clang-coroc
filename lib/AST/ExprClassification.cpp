@@ -116,6 +116,7 @@ static Cl::Kinds ClassifyInternal(ASTContext &Ctx, const Expr *E) {
     return Cl::CL_Void;
   case Expr::CoroCSpawnCallExprClass:
   case Expr::CoroCMakeChanExprClass:
+  case Expr::CoroCNewExprClass:
     return Cl::CL_PRValue;
 
     // First come the expressions that are always lvalues, unconditionally.
