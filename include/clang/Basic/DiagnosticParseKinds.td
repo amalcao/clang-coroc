@@ -916,6 +916,9 @@ def err_typecheck_coro_sclass : Error<
 def err_invalid_chan_in_typedef : Error<
     "cannot use typedef a '__chan_t<T>' like type yet">;
 
+def err_expected_type_attr : Error<
+    "expected a type attribute for `__refcnt_t'">;
+
 // OpenMP support.
 def warn_pragma_omp_ignored : Warning<
   "unexpected '#pragma omp ...' in program">, InGroup<SourceUsesOpenMP>, DefaultIgnore;

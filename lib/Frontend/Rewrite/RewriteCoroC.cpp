@@ -1386,6 +1386,9 @@ void CoroCRecursiveASTVisitor::AddDefaultInit(ValueDecl *D, bool Simple) {
 bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   // Determine the type of the var
   QualType Ty = D->getType();  
+
+  if (Ty.getTypePtrOrNull() == nullptr)
+    return false; // ignore the undefined type value..
   
   if (Ty->isStructureType() && !isa<ParmVarDecl>(D)) {
     // FIXME: add the struct var to the scope anyway,
@@ -1406,6 +1409,8 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   rewriteCoroCRefTypeName(StartLoc, BaseTy);
   if (Ty == Context->GeneralRefTy) {
     QualType RefType = D->getRefElemType();
+    if (RefType.getTypePtrOrNull() == nullptr)
+      return false;
     AddRefcntType(RefType.getTypePtr());
     std::string NewName = "struct __refcnt_" + ConvertTypeToString(RefType) + "*";
     Rewrite.ReplaceText(StartLoc, 10, NewName.c_str());

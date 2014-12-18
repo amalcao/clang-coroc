@@ -2418,11 +2418,19 @@ Parser::DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
 /// ParseCoroCRefDeclaration
 ///     __chan_t chan or __chan_t<typename> chan
 ///     __refcnt_t ptr or __refcnt_t<typename> ptr
-void Parser::ParseCoroCRefDeclaration(DeclSpec &DS) {
+bool Parser::ParseCoroCRefDeclaration(DeclSpec &DS, const char*& PrevSpec, unsigned &DiagID, bool isRefCnt) {
   // Match '<' or return 
   Token Next = NextToken();
-  if (Next.getKind() != tok::less) 
-    return;
+  if (Next.getKind() != tok::less) {
+    // The `Type' attribute must be provided when 
+    // defining a `__refcnt_t' var!!
+    if (isRefCnt) {
+      PrevSpec = "";
+      DiagID = diag::err_expected_type_attr;
+      return true;
+    }
+    return false;
+  }
 
   // eat the '__chan_t' or '__refcnt_t'
   ConsumeToken(); 
@@ -2434,11 +2442,15 @@ void Parser::ParseCoroCRefDeclaration(DeclSpec &DS) {
   if (Tok.getKind() != tok::greater) {
     ExpectAndConsume(tok::greater);
     SkipUntil(tok::semi, StopAtSemi);
-    return ;
+
+    PrevSpec = "";
+    DiagID = diag::err_expected_greater_after;
+    return true;
   }
   
   // record the element type 
   DS.SetRefElemType(Ty.get());
+  return false;
 }
 
 /// ParseDeclarationSpecifiers
@@ -3117,13 +3129,13 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       break;
     case tok::kw___chan_t:
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_chan_t, Loc, PrevSpec,
-                                     DiagID, Policy);
-      ParseCoroCRefDeclaration(DS);
+                                     DiagID, Policy) ||
+                  ParseCoroCRefDeclaration(DS, PrevSpec, DiagID, false);
       break;
     case tok::kw___refcnt_t:
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_refcnt_t, Loc, PrevSpec,
-                                     DiagID, Policy);
-      ParseCoroCRefDeclaration(DS);
+                                     DiagID, Policy) ||
+                  ParseCoroCRefDeclaration(DS, PrevSpec, DiagID);
       break;
 
     case tok::kw___group_t:
