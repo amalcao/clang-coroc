@@ -3179,7 +3179,11 @@ LexNextToken:
       return LexIdentifier(Result, CurPtr);
     }
 
-    Kind = tok::unknown;
+    // CoroC support.
+    if (CurPtr[-1] == '$' && LangOpts.CoroC)
+      Kind = tok::dollar;
+    else
+      Kind = tok::unknown;
     break;
 
   // C99 6.4.4: Character Constants.
@@ -3568,6 +3572,7 @@ LexNextToken:
 
     Kind = tok::unknown;
     break;
+
 
   default: {
     if (isASCII(Char)) {

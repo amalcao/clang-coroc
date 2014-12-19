@@ -9029,6 +9029,25 @@ static void diagnoseAddressOfInvalidType(Sema &S, SourceLocation Loc,
   S.Diag(Loc, diag::err_typecheck_address_of) << Type << E->getSourceRange();
 }
 
+/// CheckAutoDerefOperand - The operand of $ must be a CoroC __refcnt_t<T>.
+QualType Sema::CheckAutoDerefOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
+  
+  if (getLangOpts().CoroC) {
+    Expr *E = OrigOp.get()->IgnoreParens();
+    if (E->getType().getCanonicalType() == Context.GeneralRefTy) {
+      DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E);
+      assert(DE != nullptr);
+      ValueDecl *VD = DE->getDecl();
+      if (VD->isRefDecl())
+        return Context.getPointerType(VD->getRefElemType());
+    }
+  }
+
+  Diag(OpLoc, diag::err_typecheck_invalid_autoderef_param)
+    << OrigOp.get()->getSourceRange();
+  return QualType();
+}
+
 /// CheckAddressOfOperand - The operand of & must be either a function
 /// designator or an lvalue designating an object. If it is an lvalue, the
 /// object cannot be declared with storage class register or be a bit field.
@@ -9037,16 +9056,6 @@ static void diagnoseAddressOfInvalidType(Sema &S, SourceLocation Loc,
 /// In C++, the operand might be an overloaded function name, in which case
 /// we allow the '&' but retain the overloaded-function type.
 QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
-  if (getLangOpts().CoroC) {
-    Expr *E = OrigOp.get()->IgnoreParens();
-    if (E->getType() == Context.GeneralRefTy) {
-      DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E);
-      assert(DE != nullptr);
-      ValueDecl *VD = DE->getDecl();
-      if (VD->isRefDecl())
-        return Context.getPointerType(VD->getRefElemType());
-    }
-  }
 
   if (const BuiltinType *PTy = OrigOp.get()->getType()->getAsPlaceholderType()){
     if (PTy->getKind() == BuiltinType::Overload) {
@@ -9266,7 +9275,15 @@ static QualType CheckIndirectionOperand(Sema &S, Expr *Op, ExprValueKind &VK,
   else if (const ObjCObjectPointerType *OPT =
              OpTy->getAs<ObjCObjectPointerType>())
     Result = OPT->getPointeeType();
-  else {
+  else if (S.getLangOpts().CoroC && 
+           OpTy.getCanonicalType() == S.getASTContext().GeneralRefTy) {
+    DeclRefExpr *E = dyn_cast<DeclRefExpr>(Op->IgnoreParenImpCasts());
+    assert(E != nullptr);
+
+    ValueDecl *VD = E->getDecl();
+    assert(VD != nullptr && VD->isRefDecl());
+    Result = VD->getRefElemType();
+  } else {
     ExprResult PR = S.CheckPlaceholderExpr(Op);
     if (PR.isInvalid()) return QualType();
     if (PR.get() != Op)
@@ -9356,6 +9373,7 @@ static inline UnaryOperatorKind ConvertTokenKindToUnaryOpcode(
   case tok::minus:        Opc = UO_Minus; break;
   case tok::tilde:        Opc = UO_Not; break;
   case tok::exclaim:      Opc = UO_LNot; break;
+  case tok::dollar:       Opc = UO_AutoDeref; break;
   case tok::kw___real:    Opc = UO_Real; break;
   case tok::kw___imag:    Opc = UO_Imag; break;
   case tok::kw___extension__: Opc = UO_Extension; break;
@@ -9961,6 +9979,10 @@ ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
     resultType = CheckIndirectionOperand(*this, Input.get(), VK, OpLoc);
     break;
   }
+  case UO_AutoDeref:
+    resultType = CheckAutoDerefOperand(Input, OpLoc);
+    break;
+
   case UO_Plus:
   case UO_Minus:
     Input = UsualUnaryConversions(Input.get());

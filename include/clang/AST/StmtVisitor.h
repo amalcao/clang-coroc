@@ -92,6 +92,7 @@ public:
       case UO_LNot:      DISPATCH(UnaryLNot,      UnaryOperator);
       case UO_Real:      DISPATCH(UnaryReal,      UnaryOperator);
       case UO_Imag:      DISPATCH(UnaryImag,      UnaryOperator);
+      case UO_AutoDeref: DISPATCH(UnaryAutoDeref, UnaryOperator);
       case UO_Extension: DISPATCH(UnaryExtension, UnaryOperator);
       }
     }
@@ -153,6 +154,7 @@ public:
   UNARYOP_FALLBACK(PostInc)   UNARYOP_FALLBACK(PostDec)
   UNARYOP_FALLBACK(PreInc)    UNARYOP_FALLBACK(PreDec)
   UNARYOP_FALLBACK(AddrOf)    UNARYOP_FALLBACK(Deref)
+  UNARYOP_FALLBACK(AutoDeref)
 
   UNARYOP_FALLBACK(Plus)      UNARYOP_FALLBACK(Minus)
   UNARYOP_FALLBACK(Not)       UNARYOP_FALLBACK(LNot)

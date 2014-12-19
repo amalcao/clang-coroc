@@ -1029,6 +1029,7 @@ StringRef UnaryOperator::getOpcodeStr(Opcode Op) {
   case UO_PreDec:  return "--";
   case UO_AddrOf:  return "&";
   case UO_Deref:   return "*";
+  case UO_AutoDeref: return "$";
   case UO_Plus:    return "+";
   case UO_Minus:   return "-";
   case UO_Not:     return "~";
@@ -1998,6 +1999,7 @@ bool Expr::isUnusedResultAWarning(const Expr *&WarnE, SourceLocation &Loc,
     case UO_Not:
     case UO_LNot:
     case UO_Deref:
+    case UO_AutoDeref:
       break;
     case UO_PostInc:
     case UO_PostDec:

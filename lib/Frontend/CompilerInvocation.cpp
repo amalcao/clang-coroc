@@ -1189,7 +1189,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   // Trigraphs are disabled by default in c++1z onwards.
   Opts.Trigraphs = !Opts.GNUMode && !Opts.CPlusPlus1z;
 
-  Opts.DollarIdents = !Opts.AsmPreprocessor;
+  Opts.DollarIdents = !Opts.AsmPreprocessor && !Opts.CoroC;
 
   // C++1y onwards has sized global deallocation functions.
   Opts.SizedDeallocation = Opts.CPlusPlus1y;
@@ -1432,6 +1432,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.CoroC = Opts.CoroC || Args.hasArg(OPT_rewrite_coroc);
   if (Opts.CoroC && (Opts.ObjC1 || Opts.ObjC2 || Opts.CPlusPlus))
     Diags.Report(diag::err_drv_coro_not_c); //TODO
+  if (Opts.CoroC) Opts.DollarIdents = 0;
 
   if (Args.hasArg(OPT_fno_lax_vector_conversions))
     Opts.LaxVectorConversions = 0;

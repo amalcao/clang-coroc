@@ -334,6 +334,7 @@ enum UnaryOperatorKind {
   UO_Plus, UO_Minus,      // [C99 6.5.3.3] Unary arithmetic
   UO_Not, UO_LNot,        // [C99 6.5.3.3] Unary arithmetic
   UO_Real, UO_Imag,       // "__real expr"/"__imag expr" Extension.
+  UO_AutoDeref,           // [CoroC] indirection for CoroC smart-pointer
   UO_Extension            // __extension__ marker.
 };
 

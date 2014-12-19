@@ -421,6 +421,17 @@ static Decl *FindGetterSetterNameDecl(const ObjCObjectPointerType *QIdTy,
   return GDecl;
 }
 
+/// Fetch the refcnt pointee type from the refcnt DeclRefExpr
+static QualType getPointeeTypeFromExpr(Expr *E) {
+  E = E->IgnoreParenImpCasts();
+  DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E);
+  assert(DE != nullptr);
+
+  ValueDecl *VD = DE->getDecl();
+  assert(VD != nullptr && VD->isRefDecl());
+  return VD->getRefElemType();
+}
+
 ExprResult
 Sema::ActOnDependentMemberExpr(Expr *BaseExpr, QualType BaseType,
                                bool IsArrow, SourceLocation OpLoc,
@@ -874,8 +885,14 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
                                ActOnMemberAccessExtraArgs *ExtraArgs) {
   QualType BaseType = BaseExprType;
   if (IsArrow) {
-    assert(BaseType->isPointerType());
-    BaseType = BaseType->castAs<PointerType>()->getPointeeType();
+    if (getLangOpts().CoroC && 
+         BaseType.getCanonicalType() == Context.GeneralRefTy) {
+      BaseType = getPointeeTypeFromExpr(BaseExpr);
+      assert(BaseType != QualType());
+    } else {
+      assert(BaseType->isPointerType());
+      BaseType = BaseType->castAs<PointerType>()->getPointeeType();
+    }
   }
   R.setBaseObjectType(BaseType);
   
@@ -1202,6 +1219,10 @@ static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
       IsArrow = false;
     } else if (BaseType->isFunctionType()) {
       goto fail;
+    } else if (S.getLangOpts().CoroC && 
+               BaseType.getCanonicalType() == S.getASTContext().GeneralRefTy) {
+        BaseType = getPointeeTypeFromExpr(BaseExpr.get());
+        assert(BaseType != QualType());
     } else {
       S.Diag(MemberLoc, diag::err_typecheck_member_reference_arrow)
         << BaseType << BaseExpr.get()->getSourceRange();
@@ -1667,7 +1688,14 @@ BuildFieldReferenceExpr(Sema &S, Expr *BaseExpr, bool IsArrow,
     VK = VK_LValue;
   } else {
     QualType BaseType = BaseExpr->getType();
-    if (IsArrow) BaseType = BaseType->getAs<PointerType>()->getPointeeType();
+    if (IsArrow) {
+      if (BaseType.getCanonicalType() == 
+           S.getASTContext().GeneralRefTy) {
+        BaseType = getPointeeTypeFromExpr(BaseExpr);
+      } else {
+        BaseType = BaseType->getAs<PointerType>()->getPointeeType();
+      }
+    }
 
     Qualifiers BaseQuals = BaseType.getQualifiers();
 

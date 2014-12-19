@@ -42,6 +42,7 @@
   OPERATOR(PostInc) OPERATOR(PostDec) OPERATOR(PreInc) OPERATOR(PreDec)        \
       OPERATOR(AddrOf) OPERATOR(Deref) OPERATOR(Plus) OPERATOR(Minus)          \
       OPERATOR(Not) OPERATOR(LNot) OPERATOR(Real) OPERATOR(Imag)               \
+      OPERATOR(AutoDeref)                                                      \
       OPERATOR(Extension)
 
 // All binary operators (excluding compound assign operators).

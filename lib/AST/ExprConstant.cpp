@@ -8458,6 +8458,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     case UO_PreDec:
     case UO_AddrOf:
     case UO_Deref:
+    case UO_AutoDeref:
       // C99 6.6/3 allows increment and decrement within unevaluated
       // subexpressions of constant expressions, but they can never be ICEs
       // because an ICE cannot contain an lvalue operand.

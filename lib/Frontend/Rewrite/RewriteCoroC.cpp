@@ -43,6 +43,7 @@ namespace ict {
 /// \brief Check if the given type is CoroC auto-reference types.
 ///        Now, only `__chan_t', `__task_t' and `__refcnt_t'.
 static inline bool IsCoroCAutoRefType(ASTContext &Ctx, QualType T) {
+  T = T.getCanonicalType();
   return (T == Ctx.ChanRefTy || T == Ctx.TaskRefTy || T == Ctx.GeneralRefTy);
 }
 
@@ -52,8 +53,9 @@ static bool IsCoroCAutoRefExpr(ASTContext &Ctx, Expr *E,
                                DeclRefExpr **DE = nullptr) {
   if (!IsCoroCAutoRefType(Ctx, E->getType())) return false;
 
-  while (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(E))
-    E = ICE->getSubExpr();
+  //while (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(E))
+  //  E = ICE->getSubExpr();
+  E = E->IgnoreParenImpCasts();
   /* record this DeclRefExpr pointer!! */
   if (DE) *DE = dyn_cast<DeclRefExpr>(E);
   return isa<DeclRefExpr>(E);
@@ -425,13 +427,15 @@ public:
   bool VisitCoroCSelectStmt(CoroCSelectStmt *S);
 
   bool VisitCallExpr(CallExpr *E);
+  bool VisitMemberExpr(MemberExpr *E);
 
   Expr *VisitBinaryOperator(BinaryOperator *B);
   Expr *VisitChanOperator(BinaryOperator *B, unsigned Opc);
   Expr *VisitAssignmentOperator(BinaryOperator *B);
+  Expr *VisitPtrMemIndirect(BinaryOperator *B);
 
   Expr *VisitUnaryOperator(UnaryOperator *U);
-  Expr *VisitAddrOfOperator(UnaryOperator *U);
+  Expr *VisitDerefOperator(UnaryOperator *U, bool isAutoDeref);
 
   bool HasMain() { return hasMain; }
 
@@ -1332,7 +1336,8 @@ void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
     Rewrite.ReplaceText(StartLoc, "tsc_chan_t");
   else if (Ty == Context->TaskRefTy)
     Rewrite.ReplaceText(StartLoc, "tsc_coroutine_t");
-  // TODO : other auto-reference types!!
+  else if (Ty == Context->GeneralRefTy)
+    Rewrite.ReplaceText(StartLoc, "tsc_refcnt_t");
 }
 
 /// Fetch the base simple type from a given complex type.
@@ -1412,10 +1417,11 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
     if (RefType.getTypePtrOrNull() == nullptr)
       return false;
     AddRefcntType(RefType.getTypePtr());
+#if 0
     std::string NewName = "struct __refcnt_" + ConvertTypeToString(RefType) + "*";
     Rewrite.ReplaceText(StartLoc, 10, NewName.c_str());
+#endif
   }
-
   // NOTE: The `ParmVarDecl' will not be inserted into any scope!
   //       The caller will dec its counter when the function returns.
   if (isa<ParmVarDecl>(D)) return true;
@@ -1445,6 +1451,34 @@ bool CoroCRecursiveASTVisitor::VisitCallExpr(CallExpr *E) {
   return true;
 }
 
+/// If the MemberExpr 's base expr is a DeclRefExpr with '__refcnt_t<T>' 
+/// type, convert the base expr into the C pointer inside.
+bool CoroCRecursiveASTVisitor::VisitMemberExpr(MemberExpr *E) {
+  Expr *BaseExpr = E->getBase();
+  if (BaseExpr->getType().getCanonicalType() == Context->GeneralRefTy) {
+    // __refcnt_t<T> ref = ...;
+    // ref->... ==>
+    //      ( &( ((struct __refcnt_T*)(ref))->__obj[0] ) )->...
+    RewriteHelper RH(&Rewrite);
+    DeclRefExpr *DE =
+      dyn_cast<DeclRefExpr>(BaseExpr->IgnoreParenImpCasts());
+    assert(DE != nullptr);
+
+    ValueDecl *VD = DE->getDecl();
+    assert(VD != nullptr && VD->isRefDecl());
+
+    QualType ElemTy = VD->getRefElemType();
+
+    RH << "(&(((struct __refcnt_" 
+       << ConvertTypeToString(ElemTy) << "*)(";       
+    RH.InsertText(BaseExpr->getLocStart());
+
+    RH << "))->__obj[0]))";
+    RH.InsertTextAfterToken(BaseExpr->getLocEnd());
+  }
+
+  return true;
+}
 
 /// Find and fix the binary operator expression.
 /// By now, we just handle the CoroC channel operations and 
@@ -1463,13 +1497,27 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
   }
 }
 
-Expr *CoroCRecursiveASTVisitor::VisitAddrOfOperator(UnaryOperator *U) {
+Expr *CoroCRecursiveASTVisitor::VisitDerefOperator(UnaryOperator *U, bool isAutoDeref) {
   // __refcnt_t <T> ptr = ...;
-  // &(ptr)  ==> &((ptr)->_obj)
+  // $(ptr)  ==> &(((struct __refcnt_T*)(ptr))->__obj[0])
+  // -- or --
+  // *(ptr)  ==> (((struct __refcnt_T*)(ptr))->__obj[0])
   Expr *E = U->getSubExpr();
-  if (E->getType() == Context->GeneralRefTy) {
-    Rewrite.InsertTextBefore(E->getLocStart(), "(");
-    Rewrite.InsertTextAfterToken(E->getLocEnd(), "->__obj[0])");
+  if (E->getType().getCanonicalType() == Context->GeneralRefTy) {
+    RewriteHelper RH(&Rewrite);
+    QualType ElemTy = U->getType();
+
+    if (isAutoDeref) {
+      assert(ElemTy->isPointerType() && 
+             "The `$' operator must return a pointer type!");
+      ElemTy = ElemTy->getPointeeType();
+      RH << "&";
+    }
+    
+    RH << "(((struct __refcnt_" << ConvertTypeToString(ElemTy)
+       << "*)(" << E << "))->__obj[0])"; 
+
+    RH.ReplaceText(U->getSourceRange());
   }
   return U;
 }
@@ -1481,8 +1529,9 @@ Expr *CoroCRecursiveASTVisitor::VisitUnaryOperator(UnaryOperator *U) {
   switch (Opc) {
   default:
     return U;
-  case UO_AddrOf:
-    return VisitAddrOfOperator(U);
+  case UO_Deref:
+  case UO_AutoDeref:
+    return VisitDerefOperator(U, (Opc == UO_AutoDeref));
   }
 }
 
@@ -1499,10 +1548,10 @@ Expr *CoroCRecursiveASTVisitor::VisitAssignmentOperator(BinaryOperator *B) {
   // which is a macro and can be expansioned as :
   if (IsCoroCAutoRefExpr(*Context, RHS))
     // "({__refcnt_put(ref_a); ref_a = __refcnt_get(ref_b); ref_a})"
-    Rewrite.InsertText(LHS->getLocStart(), "__refcnt_assign(", true);
+    Rewrite.InsertTextBefore(LHS->getLocStart(), "__refcnt_assign(");
   else
     // "({__refcnt_put(ref_a); ref_a = ref_b; ref_a})"
-    Rewrite.InsertText(LHS->getLocStart(), "__refcnt_assign_expr(", true);
+    Rewrite.InsertTextBefore(LHS->getLocStart(), "__refcnt_assign_expr(");
 
   Rewrite.ReplaceText(B->getOperatorLoc(), B->getOpcodeStr().size(), ",");
   Rewrite.InsertTextAfterToken(RHS->getLocEnd(), ")");
@@ -1864,8 +1913,14 @@ bool RewriteCoroC::HandleTopLevelDecl(DeclGroupRef D) {
     Visitor->TraverseDecl(*I);
     // Dump the thunk helpers if any exist
     Visitor->DumpThunkHelpers(RH);
+    
     // Dump the wrapper types for auto refcnt
-    Visitor->DumpRefcntTypes(RH);
+    // NOTE: If the current the Decl is a struct/union defination
+    //       we'll delay dumping the accroding refcnt wrapper type
+    //       to avoid the case which the refcnt wrapper type need 
+    //       the current struct/union 's defination!!
+    if (!isa<RecordDecl>(*I))
+      Visitor->DumpRefcntTypes(RH);
     RH.InsertText((*I)->getSourceRange().getBegin());
   }
 

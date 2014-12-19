@@ -4080,7 +4080,14 @@ QualType Sema::CheckPointerToMemberOperands(ExprResult &LHS, ExprResult &RHS,
   //   such a class]
   QualType LHSType = LHS.get()->getType();
   if (isIndirect) {
-    if (const PointerType *Ptr = LHSType->getAs<PointerType>())
+    if (getLangOpts().CoroC && 
+        LHSType.getCanonicalType() == Context.GeneralRefTy) {
+      DeclRefExpr *E = dyn_cast<DeclRefExpr>(LHS.get()->IgnoreParens());
+      assert (E != nullptr);
+      ValueDecl *VD = E->getDecl();
+      assert (VD != nullptr && VD->isRefDecl());
+      LHSType = VD->getRefElemType();
+    } else if (const PointerType *Ptr = LHSType->getAs<PointerType>())
       LHSType = Ptr->getPointeeType();
     else {
       Diag(Loc, diag::err_bad_memptr_lhs)

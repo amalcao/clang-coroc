@@ -7264,4 +7264,9 @@ def err_case_op_not_chan_ops : Error<
 	"the expr of __CoroC_Case must be a channel operation">;
 def err_select_body_empty : Error<
 	"the body of __CoroC_Select cannot be empty">;
+
+// __refcnt_t
+def err_typecheck_invalid_autoderef_param : Error<
+    "the `$' operator must use on CoroC `__refcnt_t' vars">;
+
 } // end of sema component.

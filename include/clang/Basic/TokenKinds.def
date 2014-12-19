@@ -203,6 +203,9 @@ PUNCTUATOR(periodstar,          ".*")
 PUNCTUATOR(arrowstar,           "->*")
 PUNCTUATOR(coloncolon,          "::")
 
+// CoroC Support 
+PUNCTUATOR(dollar,              "$")
+
 // Objective C support.
 PUNCTUATOR(at,                  "@")
 

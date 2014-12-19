@@ -876,6 +876,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
       Res = Actions.ActOnUnaryOp(getCurScope(), SavedLoc, SavedKind, Res.get());
     return Res;
   }
+
   case tok::amp: {         // unary-expression: '&' cast-expression
     // Special treatment because of member pointers
     SourceLocation SavedLoc = ConsumeToken();
@@ -885,6 +886,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     return Res;
   }
 
+  case tok::dollar:        // unary-expression: '$' cast-expression
   case tok::star:          // unary-expression: '*' cast-expression
   case tok::plus:          // unary-expression: '+' cast-expression
   case tok::minus:         // unary-expression: '-' cast-expression
