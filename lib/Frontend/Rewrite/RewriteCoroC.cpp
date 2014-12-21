@@ -47,6 +47,14 @@ static inline bool IsCoroCAutoRefType(ASTContext &Ctx, QualType T) {
   return (T == Ctx.ChanRefTy || T == Ctx.TaskRefTy || T == Ctx.GeneralRefTy);
 }
 
+/// \brief Determines whether the given Type is like `__refcnt_t<T>'.
+static inline bool IsCoroCGeneralRefType(QualType T) {
+  T = T.getCanonicalType();
+  const BuiltinType *BTy = 
+          T.getTypePtr()->getAs<BuiltinType>();
+  return (BTy != nullptr) && BTy->isCoroCGeneralRefType();
+}
+
 /// \brief Check if the given Expr is a VarRefExpr and is the CoroC 
 ///        auto-reference type.
 static bool IsCoroCAutoRefExpr(ASTContext &Ctx, Expr *E, 
@@ -127,6 +135,30 @@ static void GetChanFuncname(ASTContext &Ctx, Expr *RHS, unsigned Opc,
 
   return;
 }
+
+/// \brief The helper class to print the Expr with `__refcnt_t' var inside.
+class CoroCStmtPrinterHelper : public PrinterHelper {
+  PrintingPolicy Policy;
+public:
+  CoroCStmtPrinterHelper(const LangOptions& LangOpts)
+    : Policy(LangOpts) { }
+  virtual ~CoroCStmtPrinterHelper() {}
+  
+  virtual bool handledStmt(Stmt* E, llvm::raw_ostream& OS) {
+    if (isa<MemberExpr>(E)) {
+      return handledMemberExpr(dyn_cast<MemberExpr>(E), OS);
+    } 
+    if (isa<UnaryOperator>(E)) {
+      return handledUnaryOperator(dyn_cast<UnaryOperator>(E), OS);
+    }
+    // TODO: More cases to handle?
+    return false;
+  }
+
+private:
+  bool handledMemberExpr(MemberExpr *, llvm::raw_ostream&);
+  bool handledUnaryOperator(UnaryOperator *, llvm::raw_ostream&);
+};
 
 /// \brief Fixup stub for the GotoStmt when the dest label not found yet.
 struct Fixup {
@@ -627,6 +659,73 @@ public:
 
 using namespace ict;
 
+/// Overload this since the `->' operator of `__refcnt_t<T>'.
+bool CoroCStmtPrinterHelper::handledMemberExpr(MemberExpr *Node,
+                                               llvm::raw_ostream &OS) {
+  Expr *BaseExpr = Node->getBase();
+  if (IsCoroCGeneralRefType(BaseExpr->getType())) {
+    QualType ElemTy = BaseExpr->getRefElemType();
+    // if the type of BaseExpr is `__refcnt_t', we must convert it
+    //  ref->... => 
+    //      (&(((struct __refcnt_T*)ref)->__obj[0]))->...
+    OS << "(&(((struct __refcnt_" 
+       << ConvertTypeToSubName(ElemTy) << "*)";
+    BaseExpr->printPretty(OS, this, Policy);
+    OS << ")->__obj[0]))";
+  } else {
+    BaseExpr->printPretty(OS, this, Policy);
+  }
+  
+  /// The original code of StmtPrinter::VisitMemberExpr(..)
+  MemberExpr *ParentMember = dyn_cast<MemberExpr>(Node->getBase());
+  FieldDecl  *ParentDecl   = ParentMember
+    ? dyn_cast<FieldDecl>(ParentMember->getMemberDecl()) : nullptr;
+
+  if (!ParentDecl || !ParentDecl->isAnonymousStructOrUnion())
+    OS << (Node->isArrow() ? "->" : ".");
+
+  if (FieldDecl *FD = dyn_cast<FieldDecl>(Node->getMemberDecl()))
+    if (FD->isAnonymousStructOrUnion())
+      return true;
+
+  if (NestedNameSpecifier *Qualifier = Node->getQualifier())
+    Qualifier->print(OS, Policy);
+
+  OS << Node->getMemberNameInfo();
+  return true;
+}
+
+bool CoroCStmtPrinterHelper::handledUnaryOperator(UnaryOperator *Node,
+                                                  llvm::raw_ostream& OS) {
+  Expr *SubExpr = Node->getSubExpr();
+  unsigned opCode = Node->getOpcode();
+
+  if (!IsCoroCGeneralRefType(SubExpr->getType()) ||
+      (opCode != UO_Deref && opCode != UO_AutoDeref)) {
+    return false;
+  }
+  
+  // Convert $ref =>
+  //    &(((struct __refcnt_T*)(ref))->__obj[0])
+  // Convert *ref =>
+  //    (((struct __refcnt_T*)(ref))->__obj[0])
+  QualType ElemType = SubExpr->getType();
+  if (opCode == UO_AutoDeref) {
+    assert(ElemType->isPointerType());
+    ElemType = ElemType->getPointeeType();
+    OS << "&";
+  }
+
+  OS << "(((struct __refcnt_" 
+     << ConvertTypeToSubName(ElemType) << "*)(";
+  
+  SubExpr->printPretty(OS, this, Policy);
+  OS << "))->__obj[0])";
+
+  return true;
+}
+
+
 /// Match if the current thunk is suitable for the given CallExpr
 bool ThunkHelper::MatchCallExpr(CallExpr *CE, bool isGroupOp, bool isAsync) {
   if (!TheCallExpr || !CE)
@@ -692,9 +791,9 @@ void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
 
     if (!isAsyncCall &&
         IsCoroCAutoRefType(*Context,(*it)->getType()))
-      RH << "__refcnt_get(" << RH.ConvertToString(*it, *Context) << ");" << Endl;
+      RH << "__refcnt_get(" << *it << ");" << Endl;
     else
-      RH << RH.ConvertToString(*it, *Context) << ";" << Endl;
+      RH << *it << ";" << Endl;
   }
 
   // Init the group tag if has one
@@ -1670,7 +1769,8 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 
     // get or create a new thunker
     ThunkHelper *Thunk = getOrCreateThunkHelper(CE, (G != nullptr));
-    RewriteHelper RH(&Rewrite);
+    CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
+    RewriteHelper RH(&Rewrite, &Helper);
 
     RH << "{" << Endl;
 
@@ -1745,7 +1845,8 @@ bool CoroCRecursiveASTVisitor::VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
 
     // get or create a new thunker
     ThunkHelper *Thunk = getOrCreateThunkHelper(CE, /*isGroupOp=*/false, /*isAsync=*/true);
-    RewriteHelper RH(&Rewrite);
+    CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
+    RewriteHelper RH(&Rewrite, &Helper);
 
     if (!isVoidTy) RH << "("; // !!
     RH << "{" << Endl; 

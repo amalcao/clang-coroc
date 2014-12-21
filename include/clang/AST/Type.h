@@ -1903,6 +1903,24 @@ public:
     return getKind() > Overload;
   }
 
+  /// Determines whether this type is one of CoroC builtin
+  /// reference types : __chan_t / __task_t / __refcnt_t.
+  bool isCoroCReferenceType() const {
+    return getKind() >= ChanRef && getKind() <= GeneralRef;
+  }
+
+  bool isCoroCChanRefType() const {
+    return getKind() == ChanRef;
+  }
+
+  bool isCoroCTaskRefType() const {
+    return getKind() == TaskRef;
+  }
+
+  bool isCoroCGeneralRefType() const {
+    return getKind() == GeneralRef;
+  }
+
   static bool classof(const Type *T) { return T->getTypeClass() == Builtin; }
 };
 

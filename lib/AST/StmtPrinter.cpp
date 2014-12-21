@@ -102,7 +102,7 @@ namespace  {
 
 #define ABSTRACT_STMT(CLASS)
 #define STMT(CLASS, PARENT) \
-    virtual void Visit##CLASS(CLASS *Node);
+    void Visit##CLASS(CLASS *Node);
 #include "clang/AST/StmtNodes.inc"
   };
 }
@@ -2218,114 +2218,6 @@ void StmtPrinter::VisitCoroCSelectStmt(CoroCSelectStmt *S) {
   PrintStmt(S->getBody());
 }
 
-namespace ict {
- 
-#include <string>
-
-/// \brief Convert a given QualType to a unique string
-static inline std::string ConvertTypeToSubName(QualType Ty) {
-  std::string name = Ty.getAsString();
-  std::string::size_type pos = 0;
-
-  // find all the ' '/'['/']' to '_',
-  // e.g. 'struct AA' ==> 'struct_AA'
-  //      'int A[10]' ==> 'int_A_10_'
-  while ((pos = name.find_first_of(" []", pos)) != std::string::npos) {
-    name[pos++] = '_';
-  }
-  
-  // find all the '*' to 'P'
-  pos = 0;
-  while ((pos = name.find_first_of("*", pos)) != std::string::npos) {
-    name[pos++] = 'p';
-  }
-  return name;
-}
-
-/// \brief The hepler class to print the Expr with `__refcnt_t' inside.
-class CoroCStmtPrinter : public StmtPrinter {
-  raw_ostream &OS;
-  const PrintingPolicy &Policy;
-  const ASTContext &Ctx;
-public:
-  CoroCStmtPrinter(raw_ostream &os, PrinterHelper* helper,
-                   const PrintingPolicy &policy,
-                   const ASTContext &Context)
-    : StmtPrinter(os, helper, policy)
-    , OS(os), Policy(policy), Ctx(Context){ }
-
-  virtual void VisitMemberExpr(MemberExpr *);
-  virtual void VisitUnaryOperator(UnaryOperator *);
-};
-}  // namespace ict
-
-using namespace ict;
-
-/// Overload this since the `->' operator of `__refcnt_t<T>'.
-void CoroCStmtPrinter::VisitMemberExpr(MemberExpr *Node) {
-  Expr *BaseExpr = Node->getBase();
-  if (BaseExpr->getType().getCanonicalType() == Ctx.GeneralRefTy) {
-    QualType ElemTy = BaseExpr->getRefElemType();
-    // if the type of BaseExpr is `__refcnt_t', we must convert it
-    //  ref->... => 
-    //      (&(((struct __refcnt_T*)ref)->__obj[0]))->...
-    OS << "(&(((struct __refcnt_" 
-       << ConvertTypeToSubName(ElemTy) << "*)";
-    PrintExpr(BaseExpr);
-    OS << ")->__obj[0]))";
-  } else {
-    PrintExpr(BaseExpr);
-  }
-  
-  /// The original code of StmtPrinter::VisitMemberExpr(..)
-  MemberExpr *ParentMember = dyn_cast<MemberExpr>(Node->getBase());
-  FieldDecl  *ParentDecl   = ParentMember
-    ? dyn_cast<FieldDecl>(ParentMember->getMemberDecl()) : nullptr;
-
-  if (!ParentDecl || !ParentDecl->isAnonymousStructOrUnion())
-    OS << (Node->isArrow() ? "->" : ".");
-
-  if (FieldDecl *FD = dyn_cast<FieldDecl>(Node->getMemberDecl()))
-    if (FD->isAnonymousStructOrUnion())
-      return;
-
-  if (NestedNameSpecifier *Qualifier = Node->getQualifier())
-    Qualifier->print(OS, Policy);
-  if (Node->hasTemplateKeyword())
-    OS << "template ";
-  OS << Node->getMemberNameInfo();
-  if (Node->hasExplicitTemplateArgs())
-    TemplateSpecializationType::PrintTemplateArgumentList(
-        OS, Node->getTemplateArgs(), Node->getNumTemplateArgs(), Policy); 
-}
-
-void CoroCStmtPrinter::VisitUnaryOperator(UnaryOperator *Node) {
-  Expr *SubExpr = Node->getSubExpr();
-  unsigned opCode = Node->getOpcode();
-
-  if (SubExpr->getType().getCanonicalType() != Ctx.GeneralRefTy ||
-      (opCode != UO_Deref && opCode != UO_AutoDeref)) {
-    return StmtPrinter::VisitUnaryOperator(Node);
-  }
-  
-  // Convert $ref =>
-  //    &(((struct __refcnt_T*)(ref))->__obj[0])
-  // Convert *ref =>
-  //    (((struct __refcnt_T*)(ref))->__obj[0])
-  QualType ElemType = SubExpr->getType();
-  if (opCode == UO_AutoDeref) {
-    assert(ElemType->isPointerType());
-    ElemType = ElemType->getPointeeType();
-    OS << "&";
-  }
-
-  OS << "(((struct __refcnt_" 
-     << ConvertTypeToSubName(ElemType) << "*)(";
-  
-  PrintExpr(SubExpr);
-  OS << "))->__obj[0])";
-}
-
 //===----------------------------------------------------------------------===//
 // Stmt method implementations
 //===----------------------------------------------------------------------===//
@@ -2339,14 +2231,6 @@ void Stmt::printPretty(raw_ostream &OS,
                        const PrintingPolicy &Policy,
                        unsigned Indentation) const {
   StmtPrinter P(OS, Helper, Policy, Indentation);
-  P.Visit(const_cast<Stmt*>(this));
-}
-
-void Stmt::printPrettyCoroC(raw_ostream &OS,
-                            PrinterHelper *Helper,
-                            const PrintingPolicy &Policy,
-                            const ASTContext &Ctx) const {
-  ict::CoroCStmtPrinter P(OS, Helper, Policy, Ctx);
   P.Visit(const_cast<Stmt*>(this));
 }
 

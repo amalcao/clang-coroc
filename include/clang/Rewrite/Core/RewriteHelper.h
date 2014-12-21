@@ -53,6 +53,7 @@ namespace ict {
 
     clang::Rewriter& Rewrite;
 
+    clang::PrinterHelper *Helper; // custom the Stmt output
     const char* Indentation; // the indent str for each line
     std::string CurLine; // pointer to current line
 
@@ -115,8 +116,12 @@ namespace ict {
     }
 
   public:
-    RewriteHelper(clang::Rewriter *_Rewrite, const char* _Indent = "  ") 
-      : Rewrite(*_Rewrite), Indentation(_Indent) { }
+    RewriteHelper(clang::Rewriter *_Rewrite, 
+                  clang::PrinterHelper *helper = nullptr, 
+                  const char* indent = "  ") 
+      : Rewrite(*_Rewrite)
+      , Helper(helper)
+      , Indentation(indent) { }
 
     const char* getDefaultIndent() const { return Indentation; }
 
@@ -150,11 +155,11 @@ namespace ict {
       return Rewrite.InsertTextAfterToken(Loc, LineBuffer.c_str());
     }
 
-    std::string ConvertToString(clang::Stmt* S, const clang::ASTContext& Ctx) {
+    std::string ConvertToString(clang::Stmt* S) {
       std::string SStr;
       llvm::raw_string_ostream OS(SStr);
-      S->printPrettyCoroC(OS, nullptr, 
-                          clang::PrintingPolicy(Rewrite.getLangOpts()), Ctx);
+      S->printPretty(OS, Helper, 
+                     clang::PrintingPolicy(Rewrite.getLangOpts()));
       return OS.str();
     }
 
@@ -195,7 +200,7 @@ namespace ict {
     }
 
     RewriteHelper& operator << (clang::Stmt* S) {
-      CurLine += Rewrite.ConvertToString(S);
+      CurLine += ConvertToString(S);
       return *this;
     }
 
