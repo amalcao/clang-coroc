@@ -120,7 +120,7 @@ public:
 
   /// \brief Determine whether this decl is the CoroC __chan_t / __refcnt_t.
   void setRefDecl() { RefDecl = true; }
-  bool isRefDecl() { return RefDecl; }
+  bool isRefDecl() const { return RefDecl; }
 
 private:
   NamedDecl *getUnderlyingDeclImpl() LLVM_READONLY;

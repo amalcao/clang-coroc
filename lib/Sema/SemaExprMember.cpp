@@ -421,6 +421,7 @@ static Decl *FindGetterSetterNameDecl(const ObjCObjectPointerType *QIdTy,
   return GDecl;
 }
 
+#if 0
 /// Fetch the refcnt pointee type from the refcnt DeclRefExpr
 static QualType getPointeeTypeFromExpr(Expr *E) {
   E = E->IgnoreParenImpCasts();
@@ -431,6 +432,7 @@ static QualType getPointeeTypeFromExpr(Expr *E) {
   assert(VD != nullptr && VD->isRefDecl());
   return VD->getRefElemType();
 }
+#endif
 
 ExprResult
 Sema::ActOnDependentMemberExpr(Expr *BaseExpr, QualType BaseType,
@@ -887,7 +889,7 @@ Sema::BuildMemberReferenceExpr(Expr *BaseExpr, QualType BaseExprType,
   if (IsArrow) {
     if (getLangOpts().CoroC && 
          BaseType.getCanonicalType() == Context.GeneralRefTy) {
-      BaseType = getPointeeTypeFromExpr(BaseExpr);
+      BaseType = BaseExpr->getRefElemType();
       assert(BaseType != QualType());
     } else {
       assert(BaseType->isPointerType());
@@ -1221,7 +1223,7 @@ static ExprResult LookupMemberExpr(Sema &S, LookupResult &R,
       goto fail;
     } else if (S.getLangOpts().CoroC && 
                BaseType.getCanonicalType() == S.getASTContext().GeneralRefTy) {
-        BaseType = getPointeeTypeFromExpr(BaseExpr.get());
+        BaseType = (BaseExpr.get())->getRefElemType();
         assert(BaseType != QualType());
     } else {
       S.Diag(MemberLoc, diag::err_typecheck_member_reference_arrow)
@@ -1691,7 +1693,7 @@ BuildFieldReferenceExpr(Sema &S, Expr *BaseExpr, bool IsArrow,
     if (IsArrow) {
       if (BaseType.getCanonicalType() == 
            S.getASTContext().GeneralRefTy) {
-        BaseType = getPointeeTypeFromExpr(BaseExpr);
+        BaseType = BaseExpr->getRefElemType();
       } else {
         BaseType = BaseType->getAs<PointerType>()->getPointeeType();
       }

@@ -793,6 +793,11 @@ public:
       SmallVectorImpl<const Expr *> &CommaLHS,
       SmallVectorImpl<SubobjectAdjustment> &Adjustments) const;
 
+  /// If the Expr 's type is CoroC `__refcnt_t', 
+  /// then return the pointee 's type;
+  /// otherwise, return QualType().
+  QualType getRefElemType() const;
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() >= firstExprConstant &&
            T->getStmtClass() <= lastExprConstant;

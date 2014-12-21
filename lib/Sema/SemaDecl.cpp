@@ -13630,31 +13630,50 @@ AvailabilityResult Sema::getCurContextAvailability() const {
 void Sema::CheckRefDecl(NamedDecl *D, QualType T, const DeclSpec &DS) {
   QualType Ty = T.getCanonicalType(); // get the underlying type 
 
-  if (Ty->isArrayType())
-    Ty = Context.getBaseElementType(Ty);
-  else if (Ty->isPointerType())
+  if (T->isArrayType())
+    Ty = Context.getBaseElementType(T);
+  else if (T->isPointerType())
+    Ty = T->getPointeeType();
+  else if (Ty->isPointerType()) // typedef a pointer type..
     Ty = Ty->getPointeeType();
 
-  Ty = Ty.getCanonicalType();
+  QualType QT = Ty.getCanonicalType();
 
   if (!getLangOpts().CoroC ||
-      (Ty != Context.ChanRefTy && Ty != Context.GeneralRefTy))
+      (QT != Context.ChanRefTy && QT != Context.GeneralRefTy))
     return;
 
   // Mark this decl as a CoroC chan_t / refcnt_t decl
   D->setRefDecl();
+
   // Set the elements' type info of this channel decl
+  
+  // If the type is defined directly with a elem type like:
+  // "__chan_t<T>" / "__refcnt_t<T>", then the "T" is hidden
+  // in the DeclSpec DS. Just fetch the it from DS using its
+  // methord "GetRefElemType(..)";
   TypeSourceInfo *TSInfo = nullptr;
   ParsedType PT;
   DS.GetRefElemType(PT);
 
-  Ty = GetTypeFromParser(PT, &TSInfo);
-  if (!Ty.isNull()) {
-    D->setRefElemType(Ty);
+  QT = GetTypeFromParser(PT, &TSInfo);
+  if (!QT.isNull()) {
+    D->setRefElemType(QT);
     return ;
   }
-
+  
+  // Otherwise, if the type is defined by "typedef",
+  // the elem type "T" is hidden in the TypedefNameDecl,
+  // so we must find out the TypedefType and get the 
+  // TypedefNameDecl from it, and finally fetch the elem
+  // type "T" from the Decl.
   const TypedefType* PTT = T->getAs<TypedefType>();
+  if (PTT == nullptr) {
+    // Maybe the Ty is a pointer to the Typedef type
+    // or the Ty is an array of the Typedef type.
+    PTT = Ty->getAs<TypedefType>();
+  }
+
   if (PTT != nullptr) {
     TypedefNameDecl *TND = PTT->getDecl();
     D->setRefElemType(TND->getRefElemType());

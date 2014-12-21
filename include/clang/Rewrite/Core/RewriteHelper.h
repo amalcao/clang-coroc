@@ -150,6 +150,14 @@ namespace ict {
       return Rewrite.InsertTextAfterToken(Loc, LineBuffer.c_str());
     }
 
+    std::string ConvertToString(clang::Stmt* S, const clang::ASTContext& Ctx) {
+      std::string SStr;
+      llvm::raw_string_ostream OS(SStr);
+      S->printPrettyCoroC(OS, nullptr, 
+                          clang::PrintingPolicy(Rewrite.getLangOpts()), Ctx);
+      return OS.str();
+    }
+
 #define DEFINE_OUTPUT_OPERATOR(Type) \
     RewriteHelper& operator << (Type e) {   \
       std::stringstream ss;                 \

@@ -36,6 +36,26 @@
 #include <cstring>
 using namespace clang;
 
+QualType Expr::getRefElemType() const {
+  const Expr *E = IgnoreParenImpCasts();
+  const ValueDecl *VD = nullptr;
+
+  if (const DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E)) {
+    // Get the ValueDecl of DE, since the ElemType is hide in it.
+    VD = DE->getDecl();
+  } else if (const MemberExpr *ME = dyn_cast<MemberExpr>(E)) {
+    // If it is a member expression like "p->XX",
+    // the "XX" must has the ElemType in the FieldDecl!!
+    VD = ME->getMemberDecl();
+  } else if (const UnaryOperator *U = dyn_cast<UnaryOperator>(E)) {
+    return U->getSubExpr()->getRefElemType();
+  } 
+  // TODO : More cases?
+  if (VD != nullptr && VD->isRefDecl())
+      return VD->getRefElemType();
+  return QualType();
+}
+
 const CXXRecordDecl *Expr::getBestDynamicClassType() const {
   const Expr *E = ignoreParenBaseCasts();
 

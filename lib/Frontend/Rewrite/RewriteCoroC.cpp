@@ -62,7 +62,7 @@ static bool IsCoroCAutoRefExpr(ASTContext &Ctx, Expr *E,
 }
  
 /// \brief Convert a given QualType to a unique string
-static inline std::string ConvertTypeToString(QualType Ty) {
+static inline std::string ConvertTypeToSubName(QualType Ty) {
   std::string name = Ty.getAsString();
   std::string::size_type pos = 0;
 
@@ -692,9 +692,9 @@ void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
 
     if (!isAsyncCall &&
         IsCoroCAutoRefType(*Context,(*it)->getType()))
-      RH << "__refcnt_get(" << (*it) << ");" << Endl;
+      RH << "__refcnt_get(" << RH.ConvertToString(*it, *Context) << ");" << Endl;
     else
-      RH << (*it) << ";" << Endl;
+      RH << RH.ConvertToString(*it, *Context) << ";" << Endl;
   }
 
   // Init the group tag if has one
@@ -908,7 +908,7 @@ void CoroCRecursiveASTVisitor::DumpRefcntTypes(RewriteHelper &RH) {
     bool isStructOrUnion = QT->isStructureType();
 
     // dump the type definition
-    RH << "struct __refcnt_" << ConvertTypeToString(QT) << " {" << Endl;
+    RH << "struct __refcnt_" << ConvertTypeToSubName(QT) << " {" << Endl;
     RH << Indentation << "struct tsc_refcnt __refcnt;" << Endl;
 
     if (isStructOrUnion) {
@@ -926,8 +926,8 @@ void CoroCRecursiveASTVisitor::DumpRefcntTypes(RewriteHelper &RH) {
     std::vector<FieldDecl*> Decls;
     GetRefDeclsInside(QT, Decls, *Context);
 
-    RH << "static void __refcnt_" << ConvertTypeToString(QT) << "_fini("
-       << "struct __refcnt_" << ConvertTypeToString(QT) << "* __arg) {" << Endl;
+    RH << "static void __refcnt_" << ConvertTypeToSubName(QT) << "_fini("
+       << "struct __refcnt_" << ConvertTypeToSubName(QT) << "* __arg) {" << Endl;
     
     if (Decls.size() > 0) {
       RH << Indentation << "int i;" << Endl
@@ -1418,7 +1418,7 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
       return false;
     AddRefcntType(RefType.getTypePtr());
 #if 0
-    std::string NewName = "struct __refcnt_" + ConvertTypeToString(RefType) + "*";
+    std::string NewName = "struct __refcnt_" + ConvertTypeToSubName(RefType) + "*";
     Rewrite.ReplaceText(StartLoc, 10, NewName.c_str());
 #endif
   }
@@ -1460,17 +1460,10 @@ bool CoroCRecursiveASTVisitor::VisitMemberExpr(MemberExpr *E) {
     // ref->... ==>
     //      ( &( ((struct __refcnt_T*)(ref))->__obj[0] ) )->...
     RewriteHelper RH(&Rewrite);
-    DeclRefExpr *DE =
-      dyn_cast<DeclRefExpr>(BaseExpr->IgnoreParenImpCasts());
-    assert(DE != nullptr);
-
-    ValueDecl *VD = DE->getDecl();
-    assert(VD != nullptr && VD->isRefDecl());
-
-    QualType ElemTy = VD->getRefElemType();
+    QualType ElemTy = BaseExpr->getRefElemType();
 
     RH << "(&(((struct __refcnt_" 
-       << ConvertTypeToString(ElemTy) << "*)(";       
+       << ConvertTypeToSubName(ElemTy) << "*)(";       
     RH.InsertText(BaseExpr->getLocStart());
 
     RH << "))->__obj[0]))";
@@ -1514,7 +1507,7 @@ Expr *CoroCRecursiveASTVisitor::VisitDerefOperator(UnaryOperator *U, bool isAuto
       RH << "&";
     }
     
-    RH << "(((struct __refcnt_" << ConvertTypeToString(ElemTy)
+    RH << "(((struct __refcnt_" << ConvertTypeToSubName(ElemTy)
        << "*)(" << E << "))->__obj[0])"; 
 
     RH.ReplaceText(U->getSourceRange());
@@ -1610,8 +1603,8 @@ bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
     // Transform to runtime call:
     //   __CoroC_New( __refcnt_Type_fini, __refcnt_Type, Type, 
     //                size, (__CoroC_release_handler_t) fini )
-    RH << "(__refcnt_" << ConvertTypeToString(Ty) << "_fini, "
-       << "struct __refcnt_" << ConvertTypeToString(Ty) << ", ";
+    RH << "(__refcnt_" << ConvertTypeToSubName(Ty) << "_fini, "
+       << "struct __refcnt_" << ConvertTypeToSubName(Ty) << ", ";
     RH.ReplaceText(Loc);
    
     if (SizeExpr == nullptr) {
@@ -1629,7 +1622,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
     //    __CoroC_New_Basic( __refcnt_Type, Type, size)
     
     RH << "__CoroC_New_Basic" 
-       << "(struct __refcnt_" << ConvertTypeToString(Ty) 
+       << "(struct __refcnt_" << ConvertTypeToSubName(Ty) 
        << ", " << Ty << ", ";
 
     if (SizeExpr == nullptr)

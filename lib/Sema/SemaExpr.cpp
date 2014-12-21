@@ -9035,11 +9035,9 @@ QualType Sema::CheckAutoDerefOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
   if (getLangOpts().CoroC) {
     Expr *E = OrigOp.get()->IgnoreParens();
     if (E->getType().getCanonicalType() == Context.GeneralRefTy) {
-      DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E);
-      assert(DE != nullptr);
-      ValueDecl *VD = DE->getDecl();
-      if (VD->isRefDecl())
-        return Context.getPointerType(VD->getRefElemType());
+      QualType ElemType = E->getRefElemType();
+      if (ElemType != QualType())
+        return Context.getPointerType(ElemType);
     }
   }
 
@@ -9277,12 +9275,8 @@ static QualType CheckIndirectionOperand(Sema &S, Expr *Op, ExprValueKind &VK,
     Result = OPT->getPointeeType();
   else if (S.getLangOpts().CoroC && 
            OpTy.getCanonicalType() == S.getASTContext().GeneralRefTy) {
-    DeclRefExpr *E = dyn_cast<DeclRefExpr>(Op->IgnoreParenImpCasts());
-    assert(E != nullptr);
-
-    ValueDecl *VD = E->getDecl();
-    assert(VD != nullptr && VD->isRefDecl());
-    Result = VD->getRefElemType();
+    Result = Op->getRefElemType();
+    assert(Result != QualType());
   } else {
     ExprResult PR = S.CheckPlaceholderExpr(Op);
     if (PR.isInvalid()) return QualType();
