@@ -13628,20 +13628,19 @@ AvailabilityResult Sema::getCurContextAvailability() const {
 
 /// \brief Check if the current ValueDecl is CoroC chan_t / refcnt_t decl
 void Sema::CheckRefDecl(NamedDecl *D, QualType T, const DeclSpec &DS) {
-  QualType Ty = T.getCanonicalType(); // get the underlying type 
+
+  if (!getLangOpts().CoroC || T.getTypePtrOrNull() == nullptr) 
+    return;
+  
+  QualType Ty = T;
 
   if (T->isArrayType())
     Ty = Context.getBaseElementType(T);
   else if (T->isPointerType())
     Ty = T->getPointeeType();
-  else if (Ty->isPointerType()) // typedef a pointer type..
-    Ty = Ty->getPointeeType();
 
-  QualType QT = Ty.getCanonicalType();
-
-  if (!getLangOpts().CoroC ||
-      (QT != Context.ChanRefTy && QT != Context.GeneralRefTy))
-    return;
+  if (! Ty->isCoroCReferenceType()) return;
+   
 
   // Mark this decl as a CoroC chan_t / refcnt_t decl
   D->setRefDecl();
@@ -13656,7 +13655,7 @@ void Sema::CheckRefDecl(NamedDecl *D, QualType T, const DeclSpec &DS) {
   ParsedType PT;
   DS.GetRefElemType(PT);
 
-  QT = GetTypeFromParser(PT, &TSInfo);
+  QualType QT = GetTypeFromParser(PT, &TSInfo);
   if (!QT.isNull()) {
     D->setRefElemType(QT);
     return ;

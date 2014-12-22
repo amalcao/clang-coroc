@@ -42,9 +42,11 @@ using llvm::utostr;
 namespace ict {
 /// \brief Check if the given type is CoroC auto-reference types.
 ///        Now, only `__chan_t', `__task_t' and `__refcnt_t'.
-static inline bool IsCoroCAutoRefType(ASTContext &Ctx, QualType T) {
-  T = T.getCanonicalType();
-  return (T == Ctx.ChanRefTy || T == Ctx.TaskRefTy || T == Ctx.GeneralRefTy);
+static inline bool IsCoroCAutoRefType(QualType T) {
+  const Type *Ty = T.getTypePtrOrNull();
+  if (Ty != nullptr)
+    return Ty->isCoroCReferenceType();
+  return false;
 }
 
 /// \brief Determines whether the given Type is like `__refcnt_t<T>'.
@@ -57,9 +59,8 @@ static inline bool IsCoroCGeneralRefType(QualType T) {
 
 /// \brief Check if the given Expr is a VarRefExpr and is the CoroC 
 ///        auto-reference type.
-static bool IsCoroCAutoRefExpr(ASTContext &Ctx, Expr *E, 
-                               DeclRefExpr **DE = nullptr) {
-  if (!IsCoroCAutoRefType(Ctx, E->getType())) return false;
+static bool IsCoroCAutoRefExpr(Expr *E, DeclRefExpr **DE = nullptr) {
+  if (!IsCoroCAutoRefType(E->getType())) return false;
 
   //while (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(E))
   //  E = ICE->getSubExpr();
@@ -91,7 +92,7 @@ static inline std::string ConvertTypeToSubName(QualType Ty) {
 
 /// \breif Get the FieldDecls inside the given structure type
 static void inline 
-GetRefDeclsInside(QualType Ty, std::vector<FieldDecl*> &Decls, ASTContext &Ctx) {
+GetRefDeclsInside(QualType Ty, std::vector<FieldDecl*> &Decls) {
   if (!Ty->isStructureType()) return;
 
   const RecordType *RTy = Ty->getAsStructureType();
@@ -100,7 +101,7 @@ GetRefDeclsInside(QualType Ty, std::vector<FieldDecl*> &Decls, ASTContext &Ctx) 
   
   for (RecordDecl::field_iterator I = RD->field_begin();
        I != RD->field_end(); ++I) {
-    if (IsCoroCAutoRefType(Ctx, (*I)->getType()))
+    if (IsCoroCAutoRefType((*I)->getType()))
       Decls.push_back(*I);
   }
 }
@@ -311,7 +312,7 @@ public:
     std::string FuncName;
     Expr *RHS = BO->getRHS();
     bool UsePtr;
-    bool IsAutoRef = IsCoroCAutoRefType(*Context, RHS->getType());
+    bool IsAutoRef = IsCoroCAutoRefType(RHS->getType());
 
     GetChanFuncname(*Context, RHS, BO->getOpcode(), FuncName, 
                     UsePtr, IsAutoRef, !SimpleWay, SimpleWay);
@@ -583,7 +584,7 @@ class ScopeHelper {
 
     } else if (Ty->isArrayType()) {
       // FIXME : only support the 1-dimensional constant-sized array now!!
-      if (!IsCoroCAutoRefType(*Ctx, Ctx->getBaseElementType(Ty)))
+      if (!IsCoroCAutoRefType(Ctx->getBaseElementType(Ty)))
         return;
       const ConstantArrayType *ArrayTy = dyn_cast_or_null<ConstantArrayType>(
           Ctx->getAsArrayType(Ty)); // FIXME!
@@ -596,7 +597,7 @@ class ScopeHelper {
 
     } else  {
       // ignore the var not with the special types.
-      if (!IsCoroCAutoRefType(*Ctx, Ty.getCanonicalType()))
+      if (!IsCoroCAutoRefType(Ty))
         return;
       if (emitBlock) RH << Indentation;
       RH <<  "__refcnt_put(" << Prefix << VD << ");" << Endl;
@@ -663,7 +664,7 @@ using namespace ict;
 bool CoroCStmtPrinterHelper::handledMemberExpr(MemberExpr *Node,
                                                llvm::raw_ostream &OS) {
   Expr *BaseExpr = Node->getBase();
-  if (IsCoroCGeneralRefType(BaseExpr->getType())) {
+  if (BaseExpr->getType()->isCoroCGeneralRefType()) {
     QualType ElemTy = BaseExpr->getRefElemType();
     // if the type of BaseExpr is `__refcnt_t', we must convert it
     //  ref->... => 
@@ -700,7 +701,7 @@ bool CoroCStmtPrinterHelper::handledUnaryOperator(UnaryOperator *Node,
   Expr *SubExpr = Node->getSubExpr();
   unsigned opCode = Node->getOpcode();
 
-  if (!IsCoroCGeneralRefType(SubExpr->getType()) ||
+  if (!(SubExpr->getType()->isCoroCGeneralRefType()) ||
       (opCode != UO_Deref && opCode != UO_AutoDeref)) {
     return false;
   }
@@ -790,7 +791,7 @@ void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
     RH << Indentation << paramName << "->_param" << i++ << " = ";
 
     if (!isAsyncCall &&
-        IsCoroCAutoRefType(*Context,(*it)->getType()))
+        IsCoroCAutoRefType((*it)->getType()))
       RH << "__refcnt_get(" << *it << ");" << Endl;
     else
       RH << *it << ";" << Endl;
@@ -909,7 +910,7 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
     CallExpr::arg_iterator it = TheCallExpr->arg_begin();
     for (;;) {
       QualType Ty = (*it)->getType();
-      if (IsCoroCAutoRefType(*Context, Ty))
+      if (IsCoroCAutoRefType(Ty))
         ArgStk.push_back(i);
 
       RH << "_arg->_param" << i++;
@@ -1023,7 +1024,7 @@ void CoroCRecursiveASTVisitor::DumpRefcntTypes(RewriteHelper &RH) {
 
     // dump the destructor of the new generated type
     std::vector<FieldDecl*> Decls;
-    GetRefDeclsInside(QT, Decls, *Context);
+    GetRefDeclsInside(QT, Decls);
 
     RH << "static void __refcnt_" << ConvertTypeToSubName(QT) << "_fini("
        << "struct __refcnt_" << ConvertTypeToSubName(QT) << "* __arg) {" << Endl;
@@ -1374,7 +1375,7 @@ bool CoroCRecursiveASTVisitor::VisitGotoStmt(GotoStmt *S) {
 bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
   Expr *RE = S->getRetValue();
   DeclRefExpr *DR = nullptr;
-  if (RE != nullptr && IsCoroCAutoRefExpr(*Context, RE, &DR)) {
+  if (RE != nullptr && IsCoroCAutoRefExpr(RE, &DR)) {
     assert(DR != nullptr);
     emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
                      !isSingleReturnStmt, DR->getDecl());
@@ -1392,7 +1393,7 @@ void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
                                                        QualType Ty, bool isTypedef,
                                                        SourceLocation *EndLoc) {                                                     
   Ty = Ty.getCanonicalType();
-  if (!IsCoroCAutoRefType(*Context, Ty))
+  if (!IsCoroCAutoRefType(Ty))
     return;
  
   // Check if the `__chan_t' with a type attribute
@@ -1526,7 +1527,7 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   if (isa<ParmVarDecl>(D)) return true;
 
   if (!Ty->isPointerType() && 
-      IsCoroCAutoRefType(*Context, BaseTy)) {
+      IsCoroCAutoRefType(BaseTy)) {
     // Insert the reference to current scope
     InsertRefToCurScope(D);
     // If no init code, and a default to zero!
@@ -1632,13 +1633,13 @@ Expr *CoroCRecursiveASTVisitor::VisitAssignmentOperator(BinaryOperator *B) {
   Expr *LHS = B->getLHS();
   Expr *RHS = B->getRHS();
 
-  if (!IsCoroCAutoRefType(*Context, LHS->getType()))
+  if (!IsCoroCAutoRefType(LHS->getType()))
     return B;
 
   // replace the code "ref_a = ref_b;" to
   // "__refcnt_assign(ref_a, ref_b);"
   // which is a macro and can be expansioned as :
-  if (IsCoroCAutoRefExpr(*Context, RHS))
+  if (IsCoroCAutoRefExpr(RHS))
     // "({__refcnt_put(ref_a); ref_a = __refcnt_get(ref_b); ref_a})"
     Rewrite.InsertTextBefore(LHS->getLocStart(), "__refcnt_assign(");
   else
@@ -1666,7 +1667,7 @@ Expr *CoroCRecursiveASTVisitor::VisitChanOperator(BinaryOperator *B,
 
     std::string FuncName;
     GetChanFuncname(*Context, RHS, Opc, FuncName, 
-                    usePtr, IsCoroCAutoRefType(*Context, RHS->getType()));
+                    usePtr, IsCoroCAutoRefType(RHS->getType()));
 
     // Insert the function call at the start of the first expr
     FuncName += "(";
@@ -1896,7 +1897,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
 
   // Tok is the first token of the typename.
   Token Tok = getNextTok(Loc); 
-  if (IsCoroCAutoRefType(*Context, BaseTy)) {
+  if (IsCoroCAutoRefType(BaseTy)) {
     // replace any matched <...> with blank and return the end loc.
     rewriteCoroCRefTypeName(Tok.getLocation(), BaseTy, false, &Loc);
   } 

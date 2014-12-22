@@ -1495,6 +1495,10 @@ public:
   bool isChar32Type() const;
   bool isAnyCharacterType() const;
   bool isIntegralType(ASTContext &Ctx) const;
+  bool isCoroCReferenceType() const;
+  bool isCoroCChanRefType() const;
+  bool isCoroCTaskRefType() const;
+  bool isCoroCGeneralRefType() const;
 
   /// \brief Determine whether this type is an integral or enumeration type.
   bool isIntegralOrEnumerationType() const;
@@ -1901,24 +1905,6 @@ public:
   /// special treatment.
   bool isNonOverloadPlaceholderType() const {
     return getKind() > Overload;
-  }
-
-  /// Determines whether this type is one of CoroC builtin
-  /// reference types : __chan_t / __task_t / __refcnt_t.
-  bool isCoroCReferenceType() const {
-    return getKind() >= ChanRef && getKind() <= GeneralRef;
-  }
-
-  bool isCoroCChanRefType() const {
-    return getKind() == ChanRef;
-  }
-
-  bool isCoroCTaskRefType() const {
-    return getKind() == TaskRef;
-  }
-
-  bool isCoroCGeneralRefType() const {
-    return getKind() == GeneralRef;
   }
 
   static bool classof(const Type *T) { return T->getTypeClass() == Builtin; }
@@ -5121,6 +5107,27 @@ inline bool Type::isIntegerType() const {
       !IsEnumDeclScoped(ET->getDecl());
   }
   return false;
+}
+
+inline bool Type::isCoroCReferenceType() const {
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() >= BuiltinType::ChanRef &&
+           BT->getKind() <= BuiltinType::GeneralRef;
+}
+
+inline bool Type::isCoroCChanRefType() const {
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::ChanRef;
+}
+
+inline bool Type::isCoroCTaskRefType() const {
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::TaskRef;
+}
+
+inline bool Type::isCoroCGeneralRefType() const {
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::GeneralRef;
 }
 
 inline bool Type::isScalarType() const {
