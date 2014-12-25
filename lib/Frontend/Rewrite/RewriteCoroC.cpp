@@ -1406,32 +1406,45 @@ bool CoroCRecursiveASTVisitor::VisitGotoStmt(GotoStmt *S) {
 bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
   Expr *RE = S->getRetValue();
   DeclRefExpr *DR = nullptr;
-  if (IsCoroCAutoRefExpr(RE, &DR)) {
-    assert(DR != nullptr);
-    emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
-                     !isSingleReturnStmt, DR->getDecl());
-    return true;
-  }
   
-  CoroCAutoRefFinder Finder;
-  Finder.TraverseStmt(RE);
+  if (RE != nullptr) {
+    // If return the reference itself,
+    // then ignore this refernce from the auto-cleanup list.
+    if (IsCoroCAutoRefExpr(RE, &DR)) {
+      assert(DR != nullptr);
+      emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
+                       !isSingleReturnStmt, DR->getDecl());
+      return true;
+    }
+  
+    // Try to find any reference in the return expression.
+    CoroCAutoRefFinder Finder;
+    Finder.TraverseStmt(RE);
 
-  if (Finder.Found()) {
-    unsigned id = ++unique_id_generator;
-    CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
-    RewriteHelper RH(&Rewrite, &Helper);
+    if (Finder.Found()) {
+      // If found, just moving the return expression before
+      // the auto-cleanup clauses, make a new temp var to hold
+      // the value of the expression, and finally, return this
+      // temp var instead of the orignal expression with ref inside.
+      // Doing those just because we may release the references before
+      // this ReturnStmt !!
+      unsigned id = ++unique_id_generator;
+      CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
+      RewriteHelper RH(&Rewrite, &Helper);
     
-    RH << RE->getType().getCanonicalType() 
-       << " __coroc_temp_ret_" << id
-       << " = " << RE << ";" << Endl;
+      RH << RE->getType().getCanonicalType() 
+         << " __coroc_temp_ret_" << id
+         << " = " << RE << ";" << Endl;
 
-    emitCleanupUntil(RH, SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(), 
-                    !isSingleReturnStmt);
+      emitCleanupUntil(RH, SCOPE_FUNC | SCOPE_FUNC_RET, 
+                       S->getSourceRange(), 
+                       !isSingleReturnStmt);
     
-    RH << "__coroc_temp_ret_" << id;
-    RH.ReplaceText(RE->getSourceRange());
+      RH << "__coroc_temp_ret_" << id;
+      RH.ReplaceText(RE->getSourceRange());
     
-    return false;
+      return false;
+    }
   }
 
   emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(), 
