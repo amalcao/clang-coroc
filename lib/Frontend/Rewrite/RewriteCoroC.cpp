@@ -1767,7 +1767,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
   if (Ty->isStructureType()) {
     // Transform to runtime call:
     //   __CoroC_New( __refcnt_Type_fini, __refcnt_Type, Type, 
-    //                size, (__CoroC_release_handler_t) fini )
+    //                size, fini )
     RH << "(__refcnt_" << ConvertTypeToSubName(Ty) << "_fini, "
        << "struct __refcnt_" << ConvertTypeToSubName(Ty) << ", ";
     RH.ReplaceText(Loc);
@@ -1779,7 +1779,6 @@ bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
       RH << ", NULL)";
       RH.ReplaceText(E->getLocEnd());
     } else {
-      Rewrite.InsertTextBefore(FiniExpr->getLocStart(), "(__CoroC_release_handler_t)");
       Rewrite.ReplaceText(E->getLocEnd(), 1, ")");
     }
   } else {
