@@ -5113,21 +5113,25 @@ inline bool Type::isCoroCReferenceType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() >= BuiltinType::ChanRef &&
            BT->getKind() <= BuiltinType::GeneralRef;
+  return false;
 }
 
 inline bool Type::isCoroCChanRefType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() == BuiltinType::ChanRef;
+  return false;
 }
 
 inline bool Type::isCoroCTaskRefType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() == BuiltinType::TaskRef;
+  return false;
 }
 
 inline bool Type::isCoroCGeneralRefType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() == BuiltinType::GeneralRef;
+  return false;
 }
 
 inline bool Type::isScalarType() const {
@@ -5182,7 +5186,8 @@ inline bool Type::canDecayToPointerType() const {
 
 inline bool Type::hasPointerRepresentation() const {
   return (isPointerType() || isReferenceType() || isBlockPointerType() ||
-          isObjCObjectPointerType() || isNullPtrType());
+          isObjCObjectPointerType() || isNullPtrType() ||
+          isCoroCGeneralRefType() );
 }
 
 inline bool Type::hasObjCPointerRepresentation() const {

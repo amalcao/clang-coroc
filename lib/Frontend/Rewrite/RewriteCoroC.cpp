@@ -69,7 +69,26 @@ static bool IsCoroCAutoRefExpr(Expr *E, DeclRefExpr **DE = nullptr) {
   if (DE) *DE = dyn_cast<DeclRefExpr>(E);
   return isa<DeclRefExpr>(E);
 }
- 
+
+/// \brief Find all the DeclRefExprs in the given expression
+///        wich CoroC auto-reference types.
+class CoroCAutoRefFinder
+    : public RecursiveASTVisitor<CoroCAutoRefFinder> {
+  bool found;
+public:
+  CoroCAutoRefFinder() : found(false) {}
+
+  bool VisitDeclRefExpr(DeclRefExpr *E) {
+    if (IsCoroCAutoRefType(E->getType())) {
+      found = true;
+      return false;
+    }
+    return true;
+  }
+
+  bool Found() { return found; }
+}; 
+
 /// \brief Convert a given QualType to a unique string
 static inline std::string ConvertTypeToSubName(QualType Ty) {
   std::string name = Ty.getAsString();
@@ -121,9 +140,10 @@ static void GetChanFuncname(ASTContext &Ctx, Expr *RHS, unsigned Opc,
   else
     usePtr = (RHS->isModifiableLvalue(Ctx, nullptr) == Expr::MLV_Valid);
 
-  if (Opc == BO_Shr)
-    funcName += "Recv";
-  else {
+  if (Opc == BO_Shr) {
+    funcName += "Recv"; 
+    if (isAutoRef) funcName += "Ref";
+  } else {
     funcName += "Send";
     if (isAutoRef)
       funcName += "Ref";
@@ -410,6 +430,10 @@ class CoroCRecursiveASTVisitor
   void pushSelStk(SelectHelper *Helper);
   SelectHelper *popSelStk();
 
+  void emitCleanupUntil(RewriteHelper& RH,
+                        unsigned Flags, SourceRange SR,
+                        bool emitBlock = false,
+                        ValueDecl *IgnoredVD = nullptr);
   void emitCleanupUntil(unsigned Flags, SourceRange SR,
                         bool emitBlock = false,
                         ValueDecl *IgnoredVD = nullptr);
@@ -710,7 +734,7 @@ bool CoroCStmtPrinterHelper::handledUnaryOperator(UnaryOperator *Node,
   //    &(((struct __refcnt_T*)(ref))->__obj[0])
   // Convert *ref =>
   //    (((struct __refcnt_T*)(ref))->__obj[0])
-  QualType ElemType = SubExpr->getType();
+  QualType ElemType = Node->getType();
   if (opCode == UO_AutoDeref) {
     assert(ElemType->isPointerType());
     ElemType = ElemType->getPointeeType();
@@ -1269,9 +1293,9 @@ ScopeHelper *CoroCRecursiveASTVisitor::FindLabelScope(LabelDecl *S) {
 }
 
 /// Emit the cleanup clauses until the given scope type
-void CoroCRecursiveASTVisitor::emitCleanupUntil(unsigned Flag, SourceRange SR,
+void CoroCRecursiveASTVisitor::emitCleanupUntil(RewriteHelper &RH,
+                                                unsigned Flag, SourceRange SR,
                                                 bool emitBlock, ValueDecl *IgnoredVD) {
-  RewriteHelper RH(&Rewrite);
   unsigned size = ScopeStack.size();
   bool output = false;
   ScopeHelper *Scope = ScopeStack[size - 1];
@@ -1303,6 +1327,13 @@ void CoroCRecursiveASTVisitor::emitCleanupUntil(unsigned Flag, SourceRange SR,
     RH << Endl << "}" << Endl;
     RH.InsertTextAfterToken(getNextTokLocStart(SR.getEnd()));
   }
+ 
+}
+
+void CoroCRecursiveASTVisitor::emitCleanupUntil(unsigned Flag, SourceRange SR,
+                                                bool emitBlock, ValueDecl *IgnoredVD) {
+  RewriteHelper RH(&Rewrite);
+  return emitCleanupUntil(RH, Flag, SR, emitBlock, IgnoredVD);
 }
 
 /// Emit the cleanup clauses for a goto statement with given label.
@@ -1375,11 +1406,32 @@ bool CoroCRecursiveASTVisitor::VisitGotoStmt(GotoStmt *S) {
 bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
   Expr *RE = S->getRetValue();
   DeclRefExpr *DR = nullptr;
-  if (RE != nullptr && IsCoroCAutoRefExpr(RE, &DR)) {
+  if (IsCoroCAutoRefExpr(RE, &DR)) {
     assert(DR != nullptr);
     emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
                      !isSingleReturnStmt, DR->getDecl());
     return true;
+  }
+  
+  CoroCAutoRefFinder Finder;
+  Finder.TraverseStmt(RE);
+
+  if (Finder.Found()) {
+    unsigned id = ++unique_id_generator;
+    CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
+    RewriteHelper RH(&Rewrite, &Helper);
+    
+    RH << RE->getType().getCanonicalType() 
+       << " __coroc_temp_ret_" << id
+       << " = " << RE << ";" << Endl;
+
+    emitCleanupUntil(RH, SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(), 
+                    !isSingleReturnStmt);
+    
+    RH << "__coroc_temp_ret_" << id;
+    RH.ReplaceText(RE->getSourceRange());
+    
+    return false;
   }
 
   emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(), 
@@ -1732,7 +1784,7 @@ bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
 
     RH.ReplaceText(E->getSourceRange());
   }
-  return false;
+  return true;
 }
 
 /// Transform the __CoroC_Spawn keyword
