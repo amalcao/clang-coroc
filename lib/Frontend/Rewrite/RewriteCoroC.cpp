@@ -887,7 +887,7 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
 
   /// Generate the thunk func declaration:
   RH << Endl << "static "
-     << (isAsyncCall ? "void*" : "int")
+     << (isAsyncCall ? "void" : "int")
      << " __thunk_helper_" << ThunkUID << "("
      << "struct __thunk_struct_" << ThunkUID << " *_arg) {" << Endl;
 
@@ -947,7 +947,7 @@ void ThunkHelper::dumpThunkFunc(RewriteHelper &RH) {
   RH << ");" << Endl;
 
   if (isAsyncCall)
-    RH << Indentation << "return NULL;" << Endl;
+    RH << Indentation << "return;" << Endl;
   else
     RH << Indentation << "__CoroC_Exit(0);" << Endl;
 
