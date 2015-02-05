@@ -8409,6 +8409,10 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
   case Expr::ExpressionTraitExprClass:
   case Expr::CXXNoexceptExprClass:
     return NoDiag();
+  case Expr::CoroCAsyncCallExprClass: {
+    const CoroCAsyncCallExpr *AE = cast<CoroCAsyncCallExpr>(E);
+    E = AE->getCallExpr();
+  }
   case Expr::CallExprClass:
   case Expr::CXXOperatorCallExprClass: {
     // C99 6.6/3 allows function calls within unevaluated subexpressions of

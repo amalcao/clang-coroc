@@ -2465,8 +2465,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Eonly");
     else {
       CmdArgs.push_back("-E");
-      if ((Args.hasArg(options::OPT_rewrite_objc) /*||
-           Args.hasArg(options::OPT_rewrite_coroc)*/) &&
+      if ((Args.hasArg(options::OPT_rewrite_objc) ||
+           Args.hasArg(options::OPT_rewrite_coroc)) &&
           !Args.hasArg(options::OPT_g_Group))
         CmdArgs.push_back("-P");
     }
