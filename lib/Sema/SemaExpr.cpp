@@ -6747,6 +6747,14 @@ Sema::CheckSingleAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     return Compatible;
   }
 
+  // FIXME: For CoroC, we can assign a NULL to ref types
+  if (getLangOpts().CoroC && LHSType->isCoroCReferenceType()
+        && RHS.get()->isNullPointerConstant(Context,
+                                            Expr::NPC_ValueDependentIsNull)) {
+    RHS = ImpCastExprToType(RHS.get(), LHSType, CK_NullToCoroCReference, VK_RValue);
+    return Compatible;
+  }
+
   // This check seems unnatural, however it is necessary to ensure the proper
   // conversion of functions/arrays. If the conversion were done for all
   // DeclExpr's (created by ActOnIdExpression), it would mess up the unary
@@ -8354,6 +8362,12 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
   if (!IsRelational && LHSIsNull
       && LHSType->isIntegerType() && RHSType->isBlockPointerType()) {
     LHS = ImpCastExprToType(LHS.get(), RHSType, CK_NullToPointer);
+    return ResultTy;
+  }
+
+  // Handle CoroC references compare with NULL.
+  if (LHSType->isCoroCReferenceType() && RHSIsNull) {
+    RHS = ImpCastExprToType(RHS.get(), LHSType, CK_NullToCoroCReference);
     return ResultTy;
   }
 

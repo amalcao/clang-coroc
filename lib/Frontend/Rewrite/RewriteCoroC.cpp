@@ -49,6 +49,16 @@ static inline bool IsCoroCAutoRefType(QualType T) {
   return false;
 }
 
+/// \brief Determines whether the given Expr is convert from NULL.
+static inline bool IsNullToReference(Expr *E, ASTContext &C) {
+  ImplicitCastExpr *Cast = dyn_cast<ImplicitCastExpr>(E);
+  if (Cast != nullptr) {
+    return Cast->getSubExpr()->isNullPointerConstant(C, 
+                                    Expr::NPC_ValueDependentIsNull);
+  }
+  return false;
+}
+
 /// \brief Determines whether the given Type is like `__refcnt_t<T>'.
 static inline bool IsCoroCGeneralRefType(QualType T) {
   T = T.getCanonicalType();
@@ -184,7 +194,7 @@ private:
 /// \brief Fixup stub for the GotoStmt when the dest label not found yet.
 struct Fixup {
   LabelDecl *LD;
-  SourceRange &SR;
+  SourceRange SR;
   RewriteHelper RH;
 
   Fixup(LabelDecl *_LD, SourceRange &_SR, Rewriter *Rewrite) 
@@ -560,15 +570,9 @@ class ScopeHelper {
     // if not clean, move them in the upper scope
     for (std::vector<Fixup *>::iterator I = FixupSet.begin();
          I != FixupSet.end(); ++I) {
-      if (Visitor->FindLabelScope((*I)->LD) == this) {
-        // find the label for goto fixup stub,
-        // so we should finish this fix and delete the stub now.
-        Visitor->EmitFixupEnd(*I);
-      } else {
-        // emit the cleanup for current scope,
-        // and move this stub to upper scope..
-        Visitor->EmitFixupCurScope(*I);
-      }
+      // emit the cleanup for current scope,
+      // and move this stub to upper scope..
+      Visitor->EmitFixupCurScope(*I);
     }
 
     // move to upper level of scope!
@@ -1120,6 +1124,7 @@ void CoroCRecursiveASTVisitor::PopScopeStack() {
     // TODO: solve the global auto-references in the link stage!!
     RewriteHelper RH(&Rewrite);
     CurScope->EmitCleanup(RH, false);
+    RH.InsertText(CurScope->SR.getEnd());
   }
   ScopeStack.pop_back();
 }
@@ -1134,10 +1139,13 @@ void CoroCRecursiveASTVisitor::EmitFixupCurScope(Fixup *fix) {
   ScopeHelper *CurScope = ScopeStack[ScopeStack.size() - 1];
   ScopeHelper *NextScope = ScopeStack[ScopeStack.size() - 2];
 
-  CurScope->EmitCleanup(fix->RH, false);
-
-  if (NextScope->ScopeFlags | SCOPE_GLOBAL)
+  if (FindLabelScope((fix)->LD) == CurScope ||
+          (NextScope->ScopeFlags & SCOPE_GLOBAL))
+    // find the label for goto fixup stub,
+    // so we should finish this fix and delete the stub now.
     return EmitFixupEnd(fix);
+
+  CurScope->EmitCleanup(fix->RH, false);
 
   NextScope->InsertFixup(fix);
 }
@@ -1436,6 +1444,8 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
          << " __coroc_temp_ret_" << id
          << " = " << RE << ";" << Endl;
 
+      RH.InsertText(S->getLocStart());
+
       emitCleanupUntil(RH, SCOPE_FUNC | SCOPE_FUNC_RET, 
                        S->getSourceRange(), 
                        !isSingleReturnStmt);
@@ -1538,7 +1548,8 @@ void CoroCRecursiveASTVisitor::AddDefaultInit(ValueDecl *D, bool Simple) {
 
     Expr *Init = VD->getInit();
     if (!isa<CallExpr>(Init) && !isa<CoroCMakeChanExpr>(Init) &&
-        !isa<CoroCSpawnCallExpr>(Init) && !isa<CoroCNewExpr>(Init)) {
+        !isa<CoroCSpawnCallExpr>(Init) && !isa<CoroCNewExpr>(Init) &&
+        !IsNullToReference(Init, *Context)) {
       // need to add the refcnt of the init expr..
       Rewrite.InsertTextBefore(Init->getLocStart(), "__refcnt_get(");
       Rewrite.InsertTextAfterToken(Init->getLocEnd(), ")");

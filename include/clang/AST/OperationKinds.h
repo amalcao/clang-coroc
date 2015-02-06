@@ -297,6 +297,9 @@ enum CastKind {
   // Convert a zero value for OpenCL event_t initialization.
   CK_ZeroToOCLEvent,
 
+  // Convert a null pointer to CoroC reference type.
+  CK_NullToCoroCReference,
+
   // Convert a pointer to a different address space.
   CK_AddressSpaceConversion
 };

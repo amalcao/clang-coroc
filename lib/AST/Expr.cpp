@@ -1483,6 +1483,11 @@ bool CastExpr::CastConsistency() const {
     assert(getSubExpr()->getType()->isFunctionType());
     goto CheckNoBasePath;
 
+  case CK_NullToCoroCReference:
+    assert(getType()->isCoroCReferenceType());
+    assert(getSubExpr()->getType()->isPointerType());
+    goto CheckNoBasePath;
+
   case CK_AddressSpaceConversion:
     assert(getType()->isPointerType());
     assert(getSubExpr()->getType()->isPointerType());
