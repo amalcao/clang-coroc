@@ -182,6 +182,9 @@ public:
     if (isa<UnaryOperator>(E)) {
       return handledUnaryOperator(dyn_cast<UnaryOperator>(E), OS);
     }
+    if (isa<BinaryOperator>(E)) {
+      return handledBinaryOperator(dyn_cast<BinaryOperator>(E), OS);
+    }
     // TODO: More cases to handle?
     return false;
   }
@@ -189,6 +192,7 @@ public:
 private:
   bool handledMemberExpr(MemberExpr *, llvm::raw_ostream&);
   bool handledUnaryOperator(UnaryOperator *, llvm::raw_ostream&);
+  bool handledBinaryOperator(BinaryOperator *, llvm::raw_ostream&);
 };
 
 /// \brief Fixup stub for the GotoStmt when the dest label not found yet.
@@ -477,6 +481,7 @@ public:
   bool VisitSwitchStmt(SwitchStmt *S);
   bool VisitCompoundStmt(CompoundStmt *S);
 
+  bool VisitIfStmt(IfStmt *S);
   bool VisitLabelStmt(LabelStmt *S);
   bool VisitBreakStmt(BreakStmt *S);
   bool VisitContinueStmt(ContinueStmt *S);
@@ -754,6 +759,33 @@ bool CoroCStmtPrinterHelper::handledUnaryOperator(UnaryOperator *Node,
   return true;
 }
 
+bool CoroCStmtPrinterHelper::handledBinaryOperator(BinaryOperator* Node, llvm::raw_ostream& OS) {
+  unsigned opCode = Node->getOpcode();
+  if (opCode != BO_Shl && opCode != BO_Shr) 
+    return false;
+  if (! Node->getLHS()->getType()->isCoroCChanRefType())
+    return false;
+
+  std::string funcName = "__CoroC_Chan_";
+  if (opCode == BO_Shl) 
+    funcName += "SendExpr";
+  else
+    funcName += "Recv";
+
+  OS << funcName.c_str() << "(";
+  Node->getLHS()->printPretty(OS, this, Policy);
+  OS << ", ";
+
+  if (opCode == BO_Shr) OS << "&(";
+
+  Node->getRHS()->printPretty(OS, this, Policy);
+  
+  if (opCode == BO_Shr) OS << ")";
+  
+  OS << ")";
+
+  return true;
+}
 
 /// Match if the current thunk is suitable for the given CallExpr
 bool ThunkHelper::MatchCallExpr(CallExpr *CE, bool isGroupOp, bool isAsync) {
@@ -1174,16 +1206,22 @@ void CoroCRecursiveASTVisitor::TraverseStmtWithoutScope(Stmt *S) {
   CompoundStmt *CS = dyn_cast<CompoundStmt>(S);
   if (CS == nullptr) {
     TraverseStmt(S);
-    return;
+  } else {
+    for (Stmt **It = CS->body_begin(); It != CS->body_end(); ++It) {
+      isSingleReturnStmt = isa<ReturnStmt>(*It) || 
+                           isa<CoroCQuitStmt>(*It) ||
+                           isa<CallExpr>(*It);
+      TraverseStmt(*It);
+      isSingleReturnStmt = false;
+    }
   }
-
-  for (Stmt **It = CS->body_begin(); It != CS->body_end(); ++It) {
-    isSingleReturnStmt = isa<ReturnStmt>(*It) || 
-                         isa<CoroCQuitStmt>(*It) ||
-                         isa<CallExpr>(*It);
-    TraverseStmt(*It);
-    isSingleReturnStmt = false;
+#if 0
+  // FIXME: Reset the children pointer to all nullptr,
+  // so the children will not be traverse again!!
+  for (Stmt::child_range range = S->children(); range; ++range) {
+    *range = nullptr;
   }
+#endif
 }
 
 /// The template method for all the loop stmts.
@@ -1384,6 +1422,18 @@ void CoroCRecursiveASTVisitor::emitCleanupWithLabel(LabelDecl *S,
   }
 }
 
+/// Visit the IfStmt, ignore the children 's result
+bool CoroCRecursiveASTVisitor::VisitIfStmt(IfStmt *S) {
+  /// **BUG** !!
+  ///    We have no method to continue traverse the other Stmt*
+  ///    when one of its previous brother return with a false !!
+  for (Stmt::child_range range = S->children(); range; ++range) {
+    TraverseStmt(*range);
+  }
+  return false;
+}
+
+
 /// Visit the LabelStmt, record the label with current scope info.
 bool CoroCRecursiveASTVisitor::VisitLabelStmt(LabelStmt *S) {
   InsertLabelScope(S->getDecl());
@@ -1393,13 +1443,13 @@ bool CoroCRecursiveASTVisitor::VisitLabelStmt(LabelStmt *S) {
 /// Visit the BreakStmt, try to emit the cleanup clauses until finish the
 /// current loop
 bool CoroCRecursiveASTVisitor::VisitBreakStmt(BreakStmt *S) {
-  emitCleanupUntil(SCOPE_LOOP, S->getSourceRange());
+  emitCleanupUntil(SCOPE_LOOP, S->getSourceRange(), true);
   return true;
 }
 
 /// Visit the ContinueStmt, do the same works as BreakStmt
 bool CoroCRecursiveASTVisitor::VisitContinueStmt(ContinueStmt *S) {
-  emitCleanupUntil(SCOPE_LOOP, S->getSourceRange());
+  emitCleanupUntil(SCOPE_LOOP, S->getSourceRange(), true);
   return true;
 }
 
@@ -1588,7 +1638,7 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   // FIXME: This will cause the global vars cannot be added into any scope!!
   SourceLocation StartLoc = D->getSourceRange().getBegin();
   rewriteCoroCRefTypeName(StartLoc, BaseTy);
-  if (Ty == Context->GeneralRefTy) {
+  if (BaseTy == Context->GeneralRefTy) {
     QualType RefType = D->getRefElemType();
     if (RefType.getTypePtrOrNull() == nullptr)
       return false;
@@ -1621,7 +1671,8 @@ bool CoroCRecursiveASTVisitor::VisitCallExpr(CallExpr *E) {
   
   // if this call will not return back, emit the cleanup code
   // for current fucntion scope.
-  if (FD->isNoReturn())
+  if (FD->isNoReturn() && 
+      FD->getNameAsString() == "__CoroC_Exit")
     emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, 
                      E->getSourceRange(), !isSingleReturnStmt);
   return true;
@@ -1769,6 +1820,8 @@ Expr *CoroCRecursiveASTVisitor::VisitChanOperator(BinaryOperator *B,
 bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
   Expr *SizeExpr = E->getSizeExpr();
   Expr *FiniExpr = E->getFiniExpr();
+  Expr *AppendExpr = E->getAppendExpr();
+
   QualType Ty = E->getElemType();
   // find the location of '<' and replace the text
   SourceLocation Loc = getNextTokLocStart(E->getLocStart());
@@ -1778,16 +1831,19 @@ bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
   if (Ty->isStructureType()) {
     // Transform to runtime call:
     //   __CoroC_New( __refcnt_Type_fini, __refcnt_Type, Type, 
-    //                size, fini )
+    //                size, fini, append )
     RH << "(__refcnt_" << ConvertTypeToSubName(Ty) << "_fini, "
        << "struct __refcnt_" << ConvertTypeToSubName(Ty) << ", ";
     RH.ReplaceText(Loc);
    
     if (SizeExpr == nullptr) {
-      RH << ", 1, NULL)";
+      RH << ", 1, NULL, 0)";
       RH.ReplaceText(E->getLocEnd());
     } else if (FiniExpr == nullptr) {
-      RH << ", NULL)";
+      RH << ", NULL, 0)";
+      RH.ReplaceText(E->getLocEnd());
+    } else if (AppendExpr == nullptr) {
+      RH << ", 0)";
       RH.ReplaceText(E->getLocEnd());
     } else {
       Rewrite.ReplaceText(E->getLocEnd(), 1, ")");
@@ -1829,8 +1885,8 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
   if (noThunk) {
     Expr *Callee = CE->getCallee();
     // Transform to runtime call:
-    //  __CoroC_Spawn( (__CoroC_spawn_handler_t)func, param );
-    Rewrite.InsertTextAfterToken(E->getLocStart(), "((__CoroC_spawn_handler_t)");
+    //  __CoroC_Spawn( (__CoroC_spawn_entry_t)func, param );
+    Rewrite.InsertTextAfterToken(E->getLocStart(), "((__CoroC_spawn_entry_t)");
 
     SourceLocation Loc = getNextTokLocStart(Callee->getLocEnd());
     Rewrite.ReplaceText(Loc, 1, ", ");
@@ -2105,6 +2161,10 @@ void RewriteCoroC::HandleTranslationUnit(ASTContext &C) {
 
   const RewriteBuffer *RewriteBuf =
       Rewrite.getRewriteBufferFor(SM->getMainFileID());
+
+  // check if the input file is empty.
+  if (RewriteBuf == nullptr || RewriteBuf->size() == 0) return;
+
   (*OutFile) << std::string(RewriteBuf->begin(), RewriteBuf->end());
 
   // generate the wrapper call to __CoroC_UserMain

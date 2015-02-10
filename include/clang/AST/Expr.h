@@ -4566,7 +4566,8 @@ class CoroCNewExpr : public Expr {
   enum {
     TheSizeExpr = 0,
     TheFiniExpr,
-    NumSubExprs
+    TheAppendExpr,
+    NumSubExprs,
   };
 
   QualType ElemType;
@@ -4579,12 +4580,13 @@ public:
   CoroCNewExpr(SourceLocation SL, 
                SourceLocation EL,
                QualType T, QualType ET,
-               Expr *SE, Expr *FE)
+               Expr *SE, Expr *FE, Expr *AE)
     : Expr(CoroCNewExprClass, T, VK_RValue,
            OK_Ordinary, false, false, false, false)
     , ElemType(ET), NewLoc(SL), EndLoc(EL) { 
       SubExprs[TheSizeExpr] = SE;
       SubExprs[TheFiniExpr] = FE;
+      SubExprs[TheAppendExpr] = AE;
     }
 
   /// \brief Build an empty block expression
@@ -4602,14 +4604,12 @@ public:
   const Expr* getSizeExpr() const { 
     if (SubExprs[TheSizeExpr] != nullptr)
       return cast<Expr>(SubExprs[TheSizeExpr]); 
-    else
-      return nullptr;
+    return nullptr;
   }
   Expr* getSizeExpr() { 
     if (SubExprs[TheSizeExpr] != nullptr)
       return cast<Expr>(SubExprs[TheSizeExpr]);
-    else
-      return nullptr;
+    return nullptr;
   }
   void setSizeExpr(Expr *E) { 
     SubExprs[TheSizeExpr] = E; 
@@ -4618,17 +4618,29 @@ public:
   const Expr* getFiniExpr() const {
     if (SubExprs[TheFiniExpr] != nullptr)
       return cast<Expr>(SubExprs[TheFiniExpr]); 
-    else
-      return nullptr;
+    return nullptr;
   }
   Expr* getFiniExpr() { 
     if (SubExprs[TheFiniExpr] != nullptr)
       return cast<Expr>(SubExprs[TheFiniExpr]); 
-    else
-      return nullptr;
+    return nullptr;
   }
   void setFiniExpr(Expr *E) { 
     SubExprs[TheFiniExpr] = E; 
+  }
+
+  const Expr* getAppendExpr() const {
+    if (SubExprs[TheAppendExpr] != nullptr)
+      return cast<Expr>(SubExprs[TheAppendExpr]);
+    return nullptr;
+  }
+  Expr* getAppendExpr() {
+    if (SubExprs[TheAppendExpr] != nullptr)
+      return cast<Expr>(SubExprs[TheAppendExpr]);
+    return nullptr;
+  }
+  void setAppendExpr(Expr *E) {
+    SubExprs[TheAppendExpr] = E;
   }
 
   SourceLocation getLocStart() const LLVM_READONLY {

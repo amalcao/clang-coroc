@@ -13718,7 +13718,7 @@ Sema::ActOnObjCBoolLiteral(SourceLocation OpLoc, tok::TokenKind Kind) {
 /// ActOnCoroCNewExpr - Parse __CoroC_New
 ExprResult
 Sema::ActOnCoroCNewExpr(SourceLocation NewLoc, SourceLocation GTLoc,
-                        ParsedType Ty, Expr *SE, Expr *FE) {
+                        ParsedType Ty, Expr *SE, Expr *FE, Expr *AE) {
   // check if this expr is called in a valid scope
   if (FunctionScopes.size() < 1 ||
       getCurFunction()->CompoundScopes.size() < 1) {
@@ -13730,10 +13730,12 @@ Sema::ActOnCoroCNewExpr(SourceLocation NewLoc, SourceLocation GTLoc,
   QualType T = GetTypeFromParser(Ty, &TSInfo);
 
   // check if the SIZE field is valid 
-  if (SE != nullptr && 
-      !(SE->getType()->isIntegerType())) {
-    Diag(NewLoc, diag::err_new_invalid_size_param);
-    return ExprError();
+  if (SE != nullptr) {
+    QualType Ty = SE->getType().getCanonicalType();
+    if (! Ty->isIntegerType() ) {
+      Diag(NewLoc, diag::err_new_invalid_size_param);
+      return ExprError();
+    }
   }
 
   // check if the Fini field is valid
@@ -13745,32 +13747,42 @@ Sema::ActOnCoroCNewExpr(SourceLocation NewLoc, SourceLocation GTLoc,
       return ExprError();
     }
       
-    bool hasError = (dyn_cast<DeclRefExpr>(FE) == nullptr);
-                    
+    bool hasError = false;
     // FE's type must be function or function pointer!! 
-    if (!hasError) {
-      QualType FTy = FE->getType();
-      if (! FTy->isFunctionType() ) {
-        // not a function, check if a function pointer
-        if (FTy->isPointerType()) {
-          FTy = FTy->getPointeeType();
-          hasError = ! FTy->isFunctionType();
-        } else {
+    QualType FTy = FE->getType();
+    if (! FTy->isFunctionType() ) {
+      // not a function, check if a function pointer
+      if (FTy->isPointerType()) {
+        FTy = FTy->getPointeeType();
+        if (! FTy->isFunctionType() && 
+            ! FE->isNullPointerConstant(Context, 
+                          Expr::NPC_ValueDependentIsNull) )
           hasError = true;
-        }
+      } else {
+        hasError = true;
       }
     }
+   
     // TODO: check the params' type of the function!
-
     if (hasError) {
       Diag(NewLoc, diag::err_new_invalid_fini_param);
       return ExprError();
-    }
+    } 
+
   }
-  
+ 
+  // check if the Append field is valid
+  if (AE != nullptr) {
+    QualType Ty = AE->getType().getCanonicalType();
+    if (! Ty->isIntegerType() ) {
+      Diag(NewLoc, diag::err_new_invalid_size_param);
+      return ExprError();
+    }
+  } 
+
   return new (Context) CoroCNewExpr(NewLoc, GTLoc, 
                                     Context.GeneralRefTy, 
-                                    T, SE, FE);
+                                    T, SE, FE, AE);
 }
 
 /// ActOnCoroCSpawnCallExpr - Parse __CoroC_Spawn

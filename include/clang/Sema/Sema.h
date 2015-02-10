@@ -3113,7 +3113,7 @@ public:
   ExprResult ActOnCoroCAsyncCallExpr(SourceLocation AsyncLoc, Expr *E);
   ExprResult ActOnCoroCNewExpr(SourceLocation NewLoc,
                                SourceLocation GTLoc,
-                               ParsedType T, Expr *SE, Expr *FE);
+                               ParsedType T, Expr *SE, Expr *FE, Expr *AE);
 
   StmtResult ActOnCoroCCaseOrDefaultStmt(SourceLocation CaseLoc, 
   										 Expr *E, Stmt *Body);

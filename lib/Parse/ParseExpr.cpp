@@ -1273,9 +1273,9 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
 
     SourceRange TySrcRange;
     TypeResult Ty = ParseTypeName(&TySrcRange);
-    ExprResult SubExprs[2];
+    ExprResult SubExprs[3];
     
-    for (unsigned i = 0; i < 2; ++i) {
+    for (unsigned i = 0; i < 3; ++i) {
       // try to match ','
       tok::TokenKind T = Tok.getKind();
 
@@ -1302,7 +1302,8 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
                                      ConsumeToken(), // '>'
                                      Ty.get(), 
                                      SubExprs[0].get(),
-                                     SubExprs[1].get());
+                                     SubExprs[1].get(),
+                                     SubExprs[2].get());
   }
 
 
