@@ -136,9 +136,10 @@ GetRefDeclsInside(QualType Ty, std::vector<FieldDecl*> &Decls) {
 }
 
 /// \brief Get the runtime function name of the given channel operand
-static void GetChanFuncname(ASTContext &Ctx, Expr *RHS, unsigned Opc,
-                            std::string &funcName, 
-                            bool &usePtr, bool isAutoRef = false,
+static void GetChanFuncname(Expr *RHS, unsigned Opc,
+                            std::string &funcName, bool &usePtr, 
+                            ASTContext *Ctx = nullptr, 
+                            bool isAutoRef = false,
                             bool sel = false, bool nonBlock = false) {
   bool isNullExpr = isa<CoroCNullExpr>(RHS);
   funcName = sel ? "__CoroC_Select_" : "__CoroC_Chan_";
@@ -147,8 +148,10 @@ static void GetChanFuncname(ASTContext &Ctx, Expr *RHS, unsigned Opc,
   // can be caluculated by the '&' operator.
   if (isNullExpr)
     usePtr = false;
+  else if (Ctx != nullptr)
+    usePtr = (RHS->isModifiableLvalue(*Ctx, nullptr) == Expr::MLV_Valid);
   else
-    usePtr = (RHS->isModifiableLvalue(Ctx, nullptr) == Expr::MLV_Valid);
+    usePtr = false;
 
   if (Opc == BO_Shr) {
     funcName += "Recv"; 
@@ -348,8 +351,8 @@ public:
     bool UsePtr;
     bool IsAutoRef = IsCoroCAutoRefType(RHS->getType());
 
-    GetChanFuncname(*Context, RHS, BO->getOpcode(), FuncName, 
-                    UsePtr, IsAutoRef, !SimpleWay, SimpleWay);
+    GetChanFuncname(RHS, BO->getOpcode(), FuncName, UsePtr, 
+                    Context, IsAutoRef, !SimpleWay, SimpleWay);
 
     // record the RHS if it'a coroc auto-ref and the oprand is channel send!!
     if (IsAutoRef && BO->getOpcode() == BO_Shl)
@@ -760,27 +763,29 @@ bool CoroCStmtPrinterHelper::handledUnaryOperator(UnaryOperator *Node,
 }
 
 bool CoroCStmtPrinterHelper::handledBinaryOperator(BinaryOperator* Node, llvm::raw_ostream& OS) {
-  unsigned opCode = Node->getOpcode();
-  if (opCode != BO_Shl && opCode != BO_Shr) 
+  unsigned opcode = Node->getOpcode();
+  if (opcode != BO_Shl && opcode != BO_Shr) 
     return false;
   if (! Node->getLHS()->getType()->isCoroCChanRefType())
     return false;
 
-  std::string funcName = "__CoroC_Chan_";
-  if (opCode == BO_Shl) 
-    funcName += "SendExpr";
-  else
-    funcName += "Recv";
+  Expr *RHS = Node->getRHS();
+  std::string FuncName;
+  bool UsePtr = false;
 
-  OS << funcName.c_str() << "(";
+  GetChanFuncname(RHS, opcode, FuncName, UsePtr, 
+                  /*Context=*/nullptr, 
+                  IsCoroCAutoRefType(RHS->getType())); 
+
+  OS << FuncName.c_str() << "(";
   Node->getLHS()->printPretty(OS, this, Policy);
   OS << ", ";
 
-  if (opCode == BO_Shr) OS << "&(";
+  if (UsePtr) OS << "&(";
 
-  Node->getRHS()->printPretty(OS, this, Policy);
+  RHS->printPretty(OS, this, Policy);
   
-  if (opCode == BO_Shr) OS << ")";
+  if (UsePtr) OS << ")";
   
   OS << ")";
 
@@ -1793,8 +1798,8 @@ Expr *CoroCRecursiveASTVisitor::VisitChanOperator(BinaryOperator *B,
     bool usePtr;
 
     std::string FuncName;
-    GetChanFuncname(*Context, RHS, Opc, FuncName, 
-                    usePtr, IsCoroCAutoRefType(RHS->getType()));
+    GetChanFuncname(RHS, Opc, FuncName, usePtr, Context, 
+                    IsCoroCAutoRefType(RHS->getType()));
 
     // Insert the function call at the start of the first expr
     FuncName += "(";
