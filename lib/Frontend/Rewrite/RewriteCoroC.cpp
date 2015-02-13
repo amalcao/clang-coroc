@@ -155,10 +155,13 @@ static void GetChanFuncname(Expr *RHS, unsigned Opc,
 
   if (Opc == BO_Shr) {
     funcName += "Recv"; 
-    if (isAutoRef) funcName += "Ref";
+    if (isAutoRef) { 
+      funcName += "Ref";
+      usePtr = true;
+    }
   } else {
     funcName += "Send";
-    if (isAutoRef)
+    if (isAutoRef && usePtr)
       funcName += "Ref";
     else if (!isNullExpr && !usePtr)
       funcName += "Expr";
@@ -1494,17 +1497,17 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
       unsigned id = ++unique_id_generator;
       CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
       RewriteHelper RH(&Rewrite, &Helper);
-    
-      RH << RE->getType().getCanonicalType() 
-         << " __coroc_temp_ret_" << id
-         << " = " << RE << ";" << Endl;
-
-      RH.InsertText(S->getLocStart());
 
       emitCleanupUntil(RH, SCOPE_FUNC | SCOPE_FUNC_RET, 
                        S->getSourceRange(), 
                        !isSingleReturnStmt);
-    
+      
+      RH << RE->getType().getCanonicalType() 
+         << " __coroc_temp_ret_" << id
+         << " = " << RE << ";" << Endl;
+
+      RH.InsertText(S->getLocStart(), false);  
+
       RH << "__coroc_temp_ret_" << id;
       RH.ReplaceText(RE->getSourceRange());
     

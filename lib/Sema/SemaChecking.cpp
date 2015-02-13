@@ -5174,6 +5174,10 @@ static IntRange GetExprRange(ASTContext &C, Expr *E, unsigned MaxWidth) {
   }
 
   if (BinaryOperator *BO = dyn_cast<BinaryOperator>(E)) {
+    // Check if the LHS is a CoroC channel ref 
+    QualType LHSTy = BO->getLHS()->getType().getCanonicalType();
+    bool isCoroCChanOp = LHSTy->isCoroCChanRefType();
+
     switch (BO->getOpcode()) {
 
     // Boolean-valued operations are single-bit and positive.
@@ -5218,6 +5222,9 @@ static IntRange GetExprRange(ASTContext &C, Expr *E, unsigned MaxWidth) {
 
     // Left shift gets black-listed based on a judgement call.
     case BO_Shl:
+      // For CoroC channel sending 
+      if (isCoroCChanOp) return IntRange::forBoolType();
+
       // ...except that we want to treat '1 << (blah)' as logically
       // positive.  It's an important idiom.
       if (IntegerLiteral *I
@@ -5234,6 +5241,9 @@ static IntRange GetExprRange(ASTContext &C, Expr *E, unsigned MaxWidth) {
 
     // Right shift by a constant can narrow its left argument.
     case BO_Shr:
+      // For CoroC channel sending 
+      if (isCoroCChanOp) return IntRange::forBoolType();
+
     case BO_ShrAssign: {
       IntRange L = GetExprRange(C, BO->getLHS(), MaxWidth);
 
