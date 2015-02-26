@@ -49,7 +49,9 @@ QualType Expr::getRefElemType() const {
     VD = ME->getMemberDecl();
   } else if (const UnaryOperator *U = dyn_cast<UnaryOperator>(E)) {
     return U->getSubExpr()->getRefElemType();
-  } 
+  } else if (const ArraySubscriptExpr *AE = dyn_cast<ArraySubscriptExpr>(E)) {
+    return AE->getBase()->getRefElemType();
+  }
   // TODO : More cases?
   if (VD != nullptr && VD->isRefDecl())
       return VD->getRefElemType();
