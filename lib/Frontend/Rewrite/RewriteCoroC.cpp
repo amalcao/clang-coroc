@@ -2028,15 +2028,16 @@ bool CoroCRecursiveASTVisitor::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
   QualType BaseTy = getBaseRefType(E->getElemType());
 
   // Transform to runtime call:
-  //  __CoroC_Chan(sizeof type, (expr));
-
+  //  __CoroC_Chan(sizeof type, (expr), isref);
+#if 0
   // replace '<' to '('
   SourceLocation Loc = getNextTokLocStart(ChanLoc);
   Rewrite.ReplaceText(Loc, 1, "(sizeof(");
 
   // Tok is the first token of the typename.
   Token Tok = getNextTok(Loc); 
-  if (IsCoroCAutoRefType(BaseTy)) {
+  bool isARC = IsCoroCAutoRefType(BaseTy);
+  if (isARC) {
     // replace any matched <...> with blank and return the end loc.
     rewriteCoroCRefTypeName(Tok.getLocation(), BaseTy, false, &Loc);
   } 
@@ -2048,10 +2049,27 @@ bool CoroCRecursiveASTVisitor::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
   
   // insert ')' before the ',' or '>'
   Rewrite.InsertText(Loc, ")");
-  Rewrite.ReplaceText(E->getGTLoc(), 1,
-                      CE != nullptr ? ")" : ", 0)"); // replace '>' to ')'
 
-  return true;
+  RewriteHelper RH(&Rewrite);
+  if (CE == nullptr) RH << ", 0";
+  RH << (isARC ? ", 1)" : ", 0)");
+
+  RH.ReplaceText(E->getGTLoc());
+#endif
+
+  CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
+  RewriteHelper RH(&Rewrite, &Helper);
+  
+  RH << "__CoroC_Chan(" << "sizeof(" << BaseTy << "), ";
+  
+  if (CE == nullptr) RH << "0, ";
+  else RH << CE << ", ";
+
+  RH << (IsCoroCAutoRefType(BaseTy) ? "1" : "0") << ")";
+
+  RH.ReplaceText(SourceRange(ChanLoc, E->getGTLoc()));
+
+  return false;
 }
 
 /// Transform the __CoroC_Quit keyword
