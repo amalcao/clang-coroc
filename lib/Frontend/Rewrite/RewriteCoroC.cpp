@@ -1499,9 +1499,11 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
       RewriteHelper RH(&Rewrite, &Helper);
 
       emitCleanupUntil(RH, SCOPE_FUNC | SCOPE_FUNC_RET, 
-                       S->getSourceRange(), 
-                       !isSingleReturnStmt);
+                       S->getSourceRange(), false);
       
+      if (!isSingleReturnStmt) 
+        RH << "{ " << Endl << Indentation;
+
       RH << RE->getType().getCanonicalType() 
          << " __coroc_temp_ret_" << id
          << " = " << RE << ";" << Endl;
@@ -1510,6 +1512,11 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
 
       RH << "__coroc_temp_ret_" << id;
       RH.ReplaceText(RE->getSourceRange());
+
+      if (!isSingleReturnStmt) {
+        RH << Endl << "}";
+        RH.InsertTextAfterToken(getNextTokLocStart(S->getLocEnd()));
+      }
     
       return false;
     }
@@ -2029,34 +2036,6 @@ bool CoroCRecursiveASTVisitor::VisitCoroCMakeChanExpr(CoroCMakeChanExpr *E) {
 
   // Transform to runtime call:
   //  __CoroC_Chan(sizeof type, (expr), isref);
-#if 0
-  // replace '<' to '('
-  SourceLocation Loc = getNextTokLocStart(ChanLoc);
-  Rewrite.ReplaceText(Loc, 1, "(sizeof(");
-
-  // Tok is the first token of the typename.
-  Token Tok = getNextTok(Loc); 
-  bool isARC = IsCoroCAutoRefType(BaseTy);
-  if (isARC) {
-    // replace any matched <...> with blank and return the end loc.
-    rewriteCoroCRefTypeName(Tok.getLocation(), BaseTy, false, &Loc);
-  } 
-  // try to find the ',' or '>', record the location.
-  while (Tok.isNot(tok::comma) && Tok.isNot(tok::greater)) {
-    Tok = getNextTok(Loc);
-    Loc = Tok.getLocation();
-  }
-  
-  // insert ')' before the ',' or '>'
-  Rewrite.InsertText(Loc, ")");
-
-  RewriteHelper RH(&Rewrite);
-  if (CE == nullptr) RH << ", 0";
-  RH << (isARC ? ", 1)" : ", 0)");
-
-  RH.ReplaceText(E->getGTLoc());
-#endif
-
   CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
   RewriteHelper RH(&Rewrite, &Helper);
   
