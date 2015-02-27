@@ -76,8 +76,12 @@ static bool IsCoroCAutoRefExpr(Expr *E, DeclRefExpr **DE = nullptr) {
   //  E = ICE->getSubExpr();
   E = E->IgnoreParenImpCasts();
   /* record this DeclRefExpr pointer!! */
-  if (DE) *DE = dyn_cast<DeclRefExpr>(E);
-  return isa<DeclRefExpr>(E);
+  if (DeclRefExpr *D = dyn_cast<DeclRefExpr>(E)) {
+    if (DE) *DE = D;
+    return true;
+  }
+  
+  return isa<MemberExpr>(E) || isa<ArraySubscriptExpr>(E);
 }
 
 /// \brief Find all the DeclRefExprs in the given expression
@@ -1476,8 +1480,7 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
   if (RE != nullptr) {
     // If return the reference itself,
     // then ignore this refernce from the auto-cleanup list.
-    if (IsCoroCAutoRefExpr(RE, &DR)) {
-      assert(DR != nullptr);
+    if (IsCoroCAutoRefExpr(RE, &DR) && DR != nullptr) {
       emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
                        !isSingleReturnStmt, DR->getDecl());
       return true;
