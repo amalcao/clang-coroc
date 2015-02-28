@@ -8365,10 +8365,16 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
     return ResultTy;
   }
 
-  // Handle CoroC references compare with NULL.
-  if (LHSType->isCoroCReferenceType() && RHSIsNull) {
-    RHS = ImpCastExprToType(RHS.get(), LHSType, CK_NullToCoroCReference);
-    return ResultTy;
+  // for CoroC auto-references' types
+  if (!IsRelational && LHSType->isCoroCReferenceType()) {
+    // Handle CoroC references compare with NULL.
+    if (RHSIsNull) {
+      RHS = ImpCastExprToType(RHS.get(), LHSType, CK_NullToCoroCReference);
+      return ResultTy;
+    }
+    // Handle tow CoroC references testing equal or not equal.
+    if (LHSType == RHSType)
+      return ResultTy;
   }
 
   return InvalidOperands(Loc, LHS, RHS);
