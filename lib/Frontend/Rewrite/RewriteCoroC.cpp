@@ -362,7 +362,7 @@ public:
                     Context, IsAutoRef, !SimpleWay, SimpleWay);
 
     // record the RHS if it'a coroc auto-ref and the oprand is channel send!!
-    if (IsAutoRef && BO->getOpcode() == BO_Shl)
+    if (!SimpleWay && IsAutoRef && BO->getOpcode() == BO_Shl)
       AutoRefMap[CurPos] = RHS;
 
     if (SimpleWay)
@@ -457,10 +457,12 @@ class CoroCRecursiveASTVisitor
   void emitCleanupUntil(RewriteHelper& RH,
                         unsigned Flags, SourceRange SR,
                         bool emitBlock = false,
-                        ValueDecl *IgnoredVD = nullptr);
+                        ValueDecl *IgnoredVD = nullptr,
+                        bool *IsLocal = nullptr);
   void emitCleanupUntil(unsigned Flags, SourceRange SR,
                         bool emitBlock = false,
-                        ValueDecl *IgnoredVD = nullptr);
+                        ValueDecl *IgnoredVD = nullptr,
+                        bool *IsLocal = nullptr);
   void emitCleanupWithLabel(LabelDecl *S, SourceRange SR);
 
   void AddDefaultInit(ValueDecl*, bool);
@@ -687,12 +689,15 @@ public:
   /// Emit the cleanup code for each references defined in this scope,
   /// except the one who will be used as the return value (**IgnoredVD**).
   void EmitCleanup(RewriteHelper &RH, bool emitBlock = true,
-                   ValueDecl *IgnoredVD = nullptr) {
+                   ValueDecl *IgnoredVD = nullptr,
+                   bool *IsLocal = nullptr) {
     // FIXME: special handlers need for struct and array!
     for (std::vector<ValueDecl *>::iterator I = RefSet.begin();
          I != RefSet.end(); ++I) {
-      if (IgnoredVD == *I)
+      if (IgnoredVD == *I) {
+        if (IsLocal) *IsLocal = true;
         continue;
+      }
       EmitCleanupPerRef(RH, *I, "", emitBlock);
     }
   }
@@ -1257,7 +1262,15 @@ bool CoroCRecursiveASTVisitor::VisitWhileStmt(WhileStmt *S) {
 
 /// Visit the DoStmt
 bool CoroCRecursiveASTVisitor::VisitDoStmt(DoStmt *S) {
+#if 0
   return VisitLoopStmt<DoStmt>(this, S);
+#else
+  SourceRange Range(S->getLocStart(), S->getBody()->getLocEnd());
+  ScopeHelper Scope(this, Range, SCOPE_LOOP);
+  for (Stmt::child_range range = S->children(); range; ++range)
+    TraverseStmtWithoutScope(*range);
+  return false;
+#endif
 }
 
 /// Visit the SwitchStmt
@@ -1353,7 +1366,8 @@ ScopeHelper *CoroCRecursiveASTVisitor::FindLabelScope(LabelDecl *S) {
 /// Emit the cleanup clauses until the given scope type
 void CoroCRecursiveASTVisitor::emitCleanupUntil(RewriteHelper &RH,
                                                 unsigned Flag, SourceRange SR,
-                                                bool emitBlock, ValueDecl *IgnoredVD) {
+                                                bool emitBlock, 
+                                                ValueDecl *IgnoredVD, bool *IsLocal) {
   unsigned size = ScopeStack.size();
   bool output = false;
   ScopeHelper *Scope = ScopeStack[size - 1];
@@ -1364,7 +1378,7 @@ void CoroCRecursiveASTVisitor::emitCleanupUntil(RewriteHelper &RH,
   do {
     Scope = ScopeStack[--size];
     if (Scope->GetRefCnt() > 0) {
-      Scope->EmitCleanup(RH, emitBlock, IgnoredVD);
+      Scope->EmitCleanup(RH, emitBlock, IgnoredVD, IsLocal);
       output = true;
     }
   } while (!(Scope->ScopeFlags & Flag));
@@ -1389,9 +1403,10 @@ void CoroCRecursiveASTVisitor::emitCleanupUntil(RewriteHelper &RH,
 }
 
 void CoroCRecursiveASTVisitor::emitCleanupUntil(unsigned Flag, SourceRange SR,
-                                                bool emitBlock, ValueDecl *IgnoredVD) {
+                                                bool emitBlock, ValueDecl *IgnoredVD,
+                                                bool *IsLocal) {
   RewriteHelper RH(&Rewrite);
-  return emitCleanupUntil(RH, Flag, SR, emitBlock, IgnoredVD);
+  return emitCleanupUntil(RH, Flag, SR, emitBlock, IgnoredVD, IsLocal);
 }
 
 /// Emit the cleanup clauses for a goto statement with given label.
@@ -1481,8 +1496,17 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
     // If return the reference itself,
     // then ignore this refernce from the auto-cleanup list.
     if (IsCoroCAutoRefExpr(RE, &DR) && DR != nullptr) {
+      bool isLocal = false;
       emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(),
-                       !isSingleReturnStmt, DR->getDecl());
+                       !isSingleReturnStmt, DR->getDecl(), &isLocal);
+      if (!isLocal) {
+        // NOTE: If the return ref is NOT A LOCAL ref,
+        // maybe an argument passed by caller or a global ref,
+        // then we should inc its refcnt value before return !!
+        RewriteHelper RH(&Rewrite);
+        RH << Indentation << "__refcnt_get(" << RE << ");" << Endl;
+        RH.InsertText(S->getLocStart(), false);
+      }
       return true;
     }
   
