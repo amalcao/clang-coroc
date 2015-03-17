@@ -280,7 +280,7 @@ class SelectHelper {
   bool SimpleWay;
 
   RewriteHelper Prologue;
-  RewriteHelper Epilogue;
+  std::stringstream Epilogue;
   std::map<unsigned, Expr*> AutoRefMap;
   std::vector<CoroCCaseStmt*> CaseStmtSet; 
 
@@ -300,6 +300,12 @@ class SelectHelper {
            << It->second << ");" << Endl;
       }
     }
+
+    if (!SimpleWay) {
+      // Generate dealloc set code for each case stmt!!
+      generated = true;
+      RH << Indentation << Epilogue.str() << Endl;
+    }
     
     if (generated) {
       if (pos == CaseNum) RH << "}"/* << Endl*/;
@@ -312,7 +318,7 @@ public:
                SourceLocation EL, unsigned Num, bool hasDef)
       : Context(Ctx), Rewrite(R), SelUID(UID), StartLoc(SL), EndLoc(EL),
         CaseNum(Num), CurPos(0), HasDefault(hasDef), SimpleWay(false),
-        Prologue(&R), Epilogue(&R) {
+        Prologue(&R) {
     if (CaseNum == 1 || (CaseNum == 2 && HasDefault))
       SimpleWay = true;
   }
@@ -326,9 +332,8 @@ public:
     } 
 
     Prologue.InsertTextAfterToken(StartLoc);
-    Epilogue.InsertText(EndLoc);
 
-    if (AutoRefMap.size() == 0) return;
+    if (AutoRefMap.size() == 0 && SimpleWay) return;
 
     // generate the cleanup code for coroc auto references
     for (unsigned i = 0; i < CaseNum; ++i) {
@@ -353,8 +358,8 @@ public:
              << Indentation << "__CoroC_Select_Init(__select_set_" << SelUID 
              << ", " << num << ");" << Endl; 
    
-    Epilogue << Indentation << "__CoroC_Select_Dealloc("
-             << "__select_set_" << SelUID << ");" << Endl;
+    Epilogue << "__CoroC_Select_Dealloc("
+             << "__select_set_" << SelUID << ");";
   }
 
   void InsertCaseInitialization(BinaryOperator *BO) {
