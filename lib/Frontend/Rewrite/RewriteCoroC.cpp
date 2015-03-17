@@ -280,6 +280,7 @@ class SelectHelper {
   bool SimpleWay;
 
   RewriteHelper Prologue;
+  RewriteHelper Epilogue;
   std::map<unsigned, Expr*> AutoRefMap;
   std::vector<CoroCCaseStmt*> CaseStmtSet; 
 
@@ -311,7 +312,7 @@ public:
                SourceLocation EL, unsigned Num, bool hasDef)
       : Context(Ctx), Rewrite(R), SelUID(UID), StartLoc(SL), EndLoc(EL),
         CaseNum(Num), CurPos(0), HasDefault(hasDef), SimpleWay(false),
-        Prologue(&R) {
+        Prologue(&R), Epilogue(&R) {
     if (CaseNum == 1 || (CaseNum == 2 && HasDefault))
       SimpleWay = true;
   }
@@ -325,6 +326,7 @@ public:
     } 
 
     Prologue.InsertTextAfterToken(StartLoc);
+    Epilogue.InsertText(EndLoc);
 
     if (AutoRefMap.size() == 0) return;
 
@@ -350,6 +352,9 @@ public:
              << SelUID << " = __CoroC_Select_Alloc(" << num << ");" << Endl
              << Indentation << "__CoroC_Select_Init(__select_set_" << SelUID 
              << ", " << num << ");" << Endl; 
+   
+    Epilogue << Indentation << "__CoroC_Select_Dealloc("
+             << "__select_set_" << SelUID << ");" << Endl;
   }
 
   void InsertCaseInitialization(BinaryOperator *BO) {
@@ -852,14 +857,9 @@ void ThunkHelper::DumpThunkCallPrologue(RewriteHelper &RH, CallExpr *CE,
 
   RH << Indentation << "struct __thunk_struct_" 
      << ThunkUID << "*  " << paramName << " = ("
-     << "struct __thunk_struct_" << ThunkUID << "*)";
-     
-  if (isAsyncCall)    
-    RH << "alloca"; // is async call, alloc from the stack
-  else
-    RH << "malloc";
-
-  RH << "(sizeof(struct __thunk_struct_" << ThunkUID << "));" << Endl;
+     << "struct __thunk_struct_" << ThunkUID << "*)"
+     << "malloc(sizeof(struct __thunk_struct_" 
+     << ThunkUID << "));" << Endl;
 
   // Init each arg
   int i = 0;
@@ -2039,10 +2039,15 @@ bool CoroCRecursiveASTVisitor::VisitCoroCAsyncCallExpr(CoroCAsyncCallExpr *E) {
     RH << paramName.str() << ");" << Endl;
     
     // record the return value and release the param ..
-    if (!isVoidTy)
-      RH << Indentation << paramName.str() << "->_ret; });" << Endl;
-    else
-      RH << "}" << Endl;
+    if (!isVoidTy) {
+      RH << Indentation << Ty << " __ret = " 
+         << paramName.str() << "->_ret;" << Endl 
+         << Indentation << "free(" << paramName.str() << ");" << Endl 
+         << Indentation << "__ret; });" << Endl;
+    } else {
+      RH << Indentation << "free(" << paramName.str() <<");" << Endl 
+         << "}" << Endl;
+    }
 
     // repalce the orignal callexpr's text ..
     RH.ReplaceText(CE->getSourceRange());
