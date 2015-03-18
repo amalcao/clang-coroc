@@ -138,6 +138,15 @@ namespace ict {
       return Rewrite.InsertText(Loc, LineBuffer.c_str(), InsertAfter);
     }
     
+    /// Dump the line buffer into the ostream ..
+    void Dump(llvm::raw_ostream& OS) {
+      std::string LineBuffer;
+      llvm::StringRef Indent("");
+
+      dump(LineBuffer, Indent);
+      OS << LineBuffer;
+    }
+    
     /// Replace the text in given source location with the new text.
     bool ReplaceText(clang::SourceRange SR) {
       llvm::StringRef Indent;

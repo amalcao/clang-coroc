@@ -446,7 +446,13 @@ class CoroCRecursiveASTVisitor
   std::vector<ScopeHelper *> ScopeStack;
   std::map<LabelDecl *, ScopeHelper *> LabelScopeMap;
 
-  std::map<const Type*, bool> RefcntTypesMap;
+  enum {
+    NOT_INSERT = 0,
+    NOT_PRINT_DECL = 1,
+    NOT_PRINT_DEFINE = 2,
+  };
+
+  std::map<const Type*, unsigned> RefcntTypesMap;
   std::vector<const Type*> RefcntTypesCache;
 
   Token getNextTok(SourceLocation CurLoc);
@@ -457,9 +463,8 @@ class CoroCRecursiveASTVisitor
 
   QualType getBaseRefType(QualType Ty);
 
-  void rewriteCoroCRefTypeName(SourceLocation, QualType, 
-                               bool isTypedef = false, 
-                               SourceLocation *EndLoc = nullptr);
+  void rewriteCoroCRefTypeName(NamedDecl*, SourceLocation, 
+                               QualType, bool isTypedef = false); 
 
   void pushSelStk(SelectHelper *Helper);
   SelectHelper *popSelStk();
@@ -488,6 +493,7 @@ public:
 
   void DumpThunkHelpers(RewriteHelper&);
 
+  void DeclareRefcntTypes(RewriteHelper&);
   void DumpRefcntTypes(RewriteHelper&);
 
   void TraverseStmtWithoutScope(Stmt *S);
@@ -1077,8 +1083,22 @@ void CoroCRecursiveASTVisitor::DumpThunkHelpers(RewriteHelper &RH) {
 void CoroCRecursiveASTVisitor::AddRefcntType(const Type *Ty) {
   if (!RefcntTypesMap[Ty]) {
     RefcntTypesCache.push_back(Ty);
-    RefcntTypesMap[Ty] = true;
+    RefcntTypesMap[Ty] = NOT_PRINT_DECL;
   }
+}
+
+void CoroCRecursiveASTVisitor::DeclareRefcntTypes(RewriteHelper &RH) {
+  std::vector<const Type *>::iterator it = RefcntTypesCache.begin();
+  for (; it != RefcntTypesCache.end(); ++it) {
+    const Type *ty = *it;
+    // Make sure each declaration is printed only once!!
+    if (RefcntTypesMap[ty] != NOT_PRINT_DECL) 
+      continue;
+
+    QualType QT = QualType(ty, 0);
+    RH << "struct __refcnt_" << ConvertTypeToSubName(QT) << ";" << Endl;  
+    RefcntTypesMap[ty] = NOT_PRINT_DEFINE;
+  } 
 }
 
 void CoroCRecursiveASTVisitor::DumpRefcntTypes(RewriteHelper &RH) {
@@ -1298,7 +1318,7 @@ bool CoroCRecursiveASTVisitor::VisitFunctionDecl(FunctionDecl *D) {
     Ty = Ty.getTypePtr()->getPointeeType();
 
   SourceLocation StartLoc = D->getReturnTypeSourceRange().getBegin();
-  rewriteCoroCRefTypeName(StartLoc, Ty);
+  rewriteCoroCRefTypeName(D, StartLoc, Ty);
 
   // for function decleration with a name :
   if (D->getDeclName()) {
@@ -1350,7 +1370,7 @@ bool CoroCRecursiveASTVisitor::VisitTypedefNameDecl(TypedefNameDecl *D) {
 
   TypeSourceInfo *TS = D->getTypeSourceInfo();
   if (TS != nullptr)
-    rewriteCoroCRefTypeName(TS->getTypeLoc().getLocStart(), BaseTy, true);
+    rewriteCoroCRefTypeName(D, TS->getTypeLoc().getLocStart(), BaseTy, true);
   
   return true;
 }
@@ -1561,29 +1581,32 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
 
 /// Rewrite the type name of __chan_t / __task_t, delete the attribute or add a
 /// wrapper
-void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
-                                                       QualType Ty, bool isTypedef,
-                                                       SourceLocation *EndLoc) {                                                     
+void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(NamedDecl *D, SourceLocation StartLoc,
+                                                       QualType Ty, bool isTypedef) {                                                     
   Ty = Ty.getCanonicalType();
   if (!IsCoroCAutoRefType(Ty))
     return;
  
-  // Check if the `__chan_t' with a type attribute
+  // Check if the `__chan_t' or `__refcnt_t' with a type attribute
+  SourceLocation EndLoc;
   Token TheTok = getNextTok(StartLoc);
   SourceLocation Loc = TheTok.getLocation();
   // FIXME : If more than one VarDecls share a type decl specifier,
   //         only the first one will update the type name correctly.
   //         This condition checks if the code has been rewritten yet, 
   //         note the method is ugly, but works.
+  bool rewrite = false;
+  bool isGenRef = IsCoroCGeneralRefType(Ty);
+
   if (TheTok.getKind() == tok::less) {
-    bool rewrite = (Rewrite.getRewrittenText(Loc) == "<");
+    rewrite = (Rewrite.getRewrittenText(Loc) == "<");
     unsigned n = 0;
     while (1) {
       if (TheTok.getKind() == tok::greater) n--;
       if (TheTok.getKind() == tok::less) n++;
 
       // delete the current Token
-      if (rewrite)
+      if (rewrite && !isGenRef)
         Rewrite.ReplaceText(Loc, "");
       
       // TheTok must be a closed '>' when loop ends.
@@ -1593,10 +1616,20 @@ void CoroCRecursiveASTVisitor::rewriteCoroCRefTypeName(SourceLocation StartLoc,
       Loc = TheTok.getLocation();
     } 
     // return the current end of code stream!! 
-    if (EndLoc != nullptr) *EndLoc = Loc;
+    EndLoc = Loc;
   
   } else {
-    if (EndLoc != nullptr) *EndLoc = StartLoc;
+    EndLoc = StartLoc;
+  }
+
+  // For `__refcnt_t<T>', we should update the typename
+  if (rewrite && isGenRef) {
+    QualType T = D->getRefElemType();
+    std::string newName = ConvertTypeToSubName(T);
+    newName = "struct __refcnt_" + newName + " *"; // To pointer type !!
+
+    Rewrite.ReplaceText(SourceRange(StartLoc, EndLoc), newName);
+    return;
   }
 
   // FIXME: if the current type source is from a TypedefDecl,
@@ -1684,7 +1717,7 @@ bool CoroCRecursiveASTVisitor::VisitValueDecl(ValueDecl *D) {
   // will happen when the there're more than 1 `VarDecl' in a `DeclStmt'.
   // FIXME: This will cause the global vars cannot be added into any scope!!
   SourceLocation StartLoc = D->getSourceRange().getBegin();
-  rewriteCoroCRefTypeName(StartLoc, BaseTy);
+  rewriteCoroCRefTypeName(D, StartLoc, BaseTy);
   if (BaseTy == Context->GeneralRefTy) {
     QualType RefType = D->getRefElemType();
     if (RefType.getTypePtrOrNull() == nullptr)
@@ -2177,19 +2210,45 @@ bool RewriteCoroC::HandleTopLevelDecl(DeclGroupRef D) {
   typedef DeclGroupRef::iterator iter;
   RewriteHelper RH(&Rewrite);
 
+  bool printDecl = false;
+
   for (iter I = D.begin(); I != D.end(); ++I) {
     Visitor->TraverseDecl(*I);
     // Dump the thunk helpers if any exist
     Visitor->DumpThunkHelpers(RH);
     
-    // Dump the wrapper types for auto refcnt
-    // NOTE: If the current the Decl is a struct/union defination
-    //       we'll delay dumping the accroding refcnt wrapper type
-    //       to avoid the case which the refcnt wrapper type need 
-    //       the current struct/union 's defination!!
-    if (!isa<RecordDecl>(*I))
-      Visitor->DumpRefcntTypes(RH);
-    RH.InsertText((*I)->getSourceRange().getBegin());
+    SourceLocation Loc = (*I)->getLocStart();
+
+    if (printDecl && isa<TypedefDecl>(*I)) {
+      printDecl = false; 
+    } else {
+      printDecl = false;
+      // Dump the wrapper types for auto refcnt
+      // NOTE: If the current the Decl is a struct/union defination
+      //       we'll delay dumping the accroding refcnt wrapper type
+      //       to avoid the case which the refcnt wrapper type need 
+      //       the current struct/union 's defination!!
+      if (isa<RecordDecl>(*I)) {
+        Visitor->DeclareRefcntTypes(RH);
+      
+        // FIXME: If the code is like : 
+        //            typedef struct {...} XXXX;
+        //        then we should move the refcnt type declarations
+        //        before the keyword `typedef' !!
+        if ((I + 1) != D.end() && isa<TypedefDecl>(*(I + 1))) {
+          TypedefDecl *TD = dyn_cast<TypedefDecl>(*(I + 1));
+          TypeLoc TyLoc = TD->getTypeSourceInfo()->getTypeLoc();
+          if (TyLoc.getBeginLoc() == Loc) {
+            Loc = TD->getLocStart();
+            printDecl = true;
+          }
+        }
+      } else {
+        Visitor->DumpRefcntTypes(RH);
+      }
+    }
+
+    RH.InsertText(Loc);
   }
 
   return true;
@@ -2208,6 +2267,11 @@ void RewriteCoroC::HandleTranslationUnit(ASTContext &C) {
   if (RewriteBuf == nullptr || RewriteBuf->size() == 0) return;
 
   (*OutFile) << std::string(RewriteBuf->begin(), RewriteBuf->end());
+
+  // dump the remained refcnt types ..
+  RewriteHelper RH(&Rewrite);
+  Visitor->DumpRefcntTypes(RH);
+  RH.Dump(*OutFile);
 
   // generate the wrapper call to __CoroC_UserMain
   if (Visitor->HasMain()) {
