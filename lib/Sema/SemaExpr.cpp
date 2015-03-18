@@ -3905,6 +3905,10 @@ Sema::CreateBuiltinArraySubscriptExpr(Expr *Base, SourceLocation LLoc,
     BaseExpr = RHSExp;
     IndexExpr = LHSExp;
     ResultType = RHSTy->getAs<PointerType>()->getPointeeType();
+  } else if (LHSTy->isCoroCReferenceType()) {
+    BaseExpr = LHSExp;
+    IndexExpr = RHSExp;
+    ResultType = LHSExp->getRefElemType();
   } else {
     return ExprError(Diag(LLoc, diag::err_typecheck_subscript_value)
        << LHSExp->getSourceRange() << RHSExp->getSourceRange());

@@ -195,6 +195,9 @@ public:
     if (isa<BinaryOperator>(E)) {
       return handledBinaryOperator(dyn_cast<BinaryOperator>(E), OS);
     }
+    if (isa<ArraySubscriptExpr>(E)) {
+      return handledArraySubscriptExpr(dyn_cast<ArraySubscriptExpr>(E), OS);
+    }
     // TODO: More cases to handle?
     return false;
   }
@@ -203,6 +206,7 @@ private:
   bool handledMemberExpr(MemberExpr *, llvm::raw_ostream&);
   bool handledUnaryOperator(UnaryOperator *, llvm::raw_ostream&);
   bool handledBinaryOperator(BinaryOperator *, llvm::raw_ostream&);
+  bool handledArraySubscriptExpr(ArraySubscriptExpr *, llvm::raw_ostream&);
 };
 
 /// \brief Fixup stub for the GotoStmt when the dest label not found yet.
@@ -528,6 +532,7 @@ public:
 
   bool VisitCallExpr(CallExpr *E);
   bool VisitMemberExpr(MemberExpr *E);
+  bool VisitArraySubscriptExpr(ArraySubscriptExpr *E);
 
   Expr *VisitBinaryOperator(BinaryOperator *B);
   Expr *VisitChanOperator(BinaryOperator *B, unsigned Opc);
@@ -757,6 +762,25 @@ bool CoroCStmtPrinterHelper::handledMemberExpr(MemberExpr *Node,
     Qualifier->print(OS, Policy);
 
   OS << Node->getMemberNameInfo();
+  return true;
+}
+
+bool CoroCStmtPrinterHelper::handledArraySubscriptExpr(ArraySubscriptExpr *Node,
+                                                       llvm::raw_ostream& OS) {
+  Expr *BaseExpr = Node->getBase();
+  if (!(BaseExpr->getType()->isCoroCGeneralRefType())) {
+    return false;
+  }
+
+  QualType ElemTy = BaseExpr->getRefElemType();
+  OS << "(&(((struct __refcnt_" 
+    << ConvertTypeToSubName(ElemTy) << "*)";
+  BaseExpr->printPretty(OS, this, Policy);
+  OS << ")->__obj[0]))";
+  
+  OS << "[";
+  Node->getIdx()->printPretty(OS, this, Policy);
+  OS << "]";
   return true;
 }
 
@@ -1779,6 +1803,24 @@ bool CoroCRecursiveASTVisitor::VisitMemberExpr(MemberExpr *E) {
 
   return true;
 }
+
+/// If the ArraySubscriptExpr 's base expr is a __refcnt_t type,
+/// convert the base expr into the C pointer inside.
+bool CoroCRecursiveASTVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr* E) {
+  Expr *BaseExpr = E->getBase();
+  if (BaseExpr->getType().getCanonicalType() == Context->GeneralRefTy) {
+    RewriteHelper RH(&Rewrite);
+    QualType ElemTy = BaseExpr->getRefElemType();
+
+    RH << "(&(((struct __refcnt_" 
+       << ConvertTypeToSubName(ElemTy) << "*)(";       
+    RH.InsertText(BaseExpr->getLocStart());
+
+    RH << "))->__obj[0]))";
+    RH.InsertTextAfterToken(BaseExpr->getLocEnd());
+  }
+}
+
 
 /// Find and fix the binary operator expression.
 /// By now, we just handle the CoroC channel operations and 
