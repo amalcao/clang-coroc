@@ -734,12 +734,10 @@ bool CoroCStmtPrinterHelper::handledMemberExpr(MemberExpr *Node,
                                                llvm::raw_ostream &OS) {
   Expr *BaseExpr = Node->getBase();
   if (BaseExpr->getType()->isCoroCGeneralRefType()) {
-    QualType ElemTy = BaseExpr->getRefElemType();
     // if the type of BaseExpr is `__refcnt_t', we must convert it
     //  ref->... => 
-    //      (&(((struct __refcnt_T*)ref)->__obj[0]))->...
-    OS << "(&(((struct __refcnt_" 
-       << ConvertTypeToSubName(ElemTy) << "*)";
+    //      (&((ref)->__obj[0]))->...
+    OS << "(&((";
     BaseExpr->printPretty(OS, this, Policy);
     OS << ")->__obj[0]))";
   } else {
@@ -772,9 +770,10 @@ bool CoroCStmtPrinterHelper::handledArraySubscriptExpr(ArraySubscriptExpr *Node,
     return false;
   }
 
-  QualType ElemTy = BaseExpr->getRefElemType();
-  OS << "(&(((struct __refcnt_" 
-    << ConvertTypeToSubName(ElemTy) << "*)";
+  // Convert ref[XX]  ==>
+  //    (&((ref)->__obj[0]))[XX]
+
+  OS << "(&((";
   BaseExpr->printPretty(OS, this, Policy);
   OS << ")->__obj[0]))";
   
@@ -795,21 +794,19 @@ bool CoroCStmtPrinterHelper::handledUnaryOperator(UnaryOperator *Node,
   }
   
   // Convert $ref =>
-  //    &(((struct __refcnt_T*)(ref))->__obj[0])
+  //    (&((ref)->__obj[0]))
   // Convert *ref =>
-  //    (((struct __refcnt_T*)(ref))->__obj[0])
-  QualType ElemType = Node->getType();
+  //    ((ref)->__obj[0])
   if (opCode == UO_AutoDeref) {
+    QualType ElemType = Node->getType();
     assert(ElemType->isPointerType());
-    ElemType = ElemType->getPointeeType();
-    OS << "&";
+    OS << "(&";
   }
 
-  OS << "(((struct __refcnt_" 
-     << ConvertTypeToSubName(ElemType) << "*)(";
-  
+  OS << "(("; 
   SubExpr->printPretty(OS, this, Policy);
-  OS << "))->__obj[0])";
+  OS << ")->__obj[0])";
+  if (opCode == UO_AutoDeref) OS << ")";
 
   return true;
 }
@@ -1789,15 +1786,13 @@ bool CoroCRecursiveASTVisitor::VisitMemberExpr(MemberExpr *E) {
   if (BaseExpr->getType().getCanonicalType() == Context->GeneralRefTy) {
     // __refcnt_t<T> ref = ...;
     // ref->... ==>
-    //      ( &( ((struct __refcnt_T*)(ref))->__obj[0] ) )->...
+    //      ( &( (ref)->__obj[0] ) )->...
     RewriteHelper RH(&Rewrite);
-    QualType ElemTy = BaseExpr->getRefElemType();
 
-    RH << "(&(((struct __refcnt_" 
-       << ConvertTypeToSubName(ElemTy) << "*)(";       
+    RH << "(&((";
     RH.InsertText(BaseExpr->getLocStart());
 
-    RH << "))->__obj[0]))";
+    RH << ")->__obj[0]))";
     RH.InsertTextAfterToken(BaseExpr->getLocEnd());
   }
 
@@ -1810,15 +1805,14 @@ bool CoroCRecursiveASTVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr* E) {
   Expr *BaseExpr = E->getBase();
   if (BaseExpr->getType().getCanonicalType() == Context->GeneralRefTy) {
     RewriteHelper RH(&Rewrite);
-    QualType ElemTy = BaseExpr->getRefElemType();
 
-    RH << "(&(((struct __refcnt_" 
-       << ConvertTypeToSubName(ElemTy) << "*)(";       
+    RH << "(&((";
     RH.InsertText(BaseExpr->getLocStart());
-
-    RH << "))->__obj[0]))";
+    
+    RH << ")->__obj[0]))";
     RH.InsertTextAfterToken(BaseExpr->getLocEnd());
   }
+  return true;
 }
 
 
@@ -1841,24 +1835,23 @@ Expr *CoroCRecursiveASTVisitor::VisitBinaryOperator(BinaryOperator *B) {
 
 Expr *CoroCRecursiveASTVisitor::VisitDerefOperator(UnaryOperator *U, bool isAutoDeref) {
   // __refcnt_t <T> ptr = ...;
-  // $(ptr)  ==> &(((struct __refcnt_T*)(ptr))->__obj[0])
+  // $(ptr)  ==> (&((ptr)->__obj[0]))
   // -- or --
-  // *(ptr)  ==> (((struct __refcnt_T*)(ptr))->__obj[0])
+  // *(ptr)  ==> ((ptr)->__obj[0])
   Expr *E = U->getSubExpr();
   if (E->getType().getCanonicalType() == Context->GeneralRefTy) {
     RewriteHelper RH(&Rewrite);
-    QualType ElemTy = U->getType();
 
     if (isAutoDeref) {
+      QualType ElemTy = U->getType();
       assert(ElemTy->isPointerType() && 
              "The `$' operator must return a pointer type!");
-      ElemTy = ElemTy->getPointeeType();
-      RH << "&";
+      RH << "(&";
     }
     
-    RH << "(((struct __refcnt_" << ConvertTypeToSubName(ElemTy)
-       << "*)(" << E << "))->__obj[0])"; 
+    RH << "((" << E << ")->__obj[0])";
 
+    if (isAutoDeref) RH << ")";
     RH.ReplaceText(U->getSourceRange());
   }
   return U;
