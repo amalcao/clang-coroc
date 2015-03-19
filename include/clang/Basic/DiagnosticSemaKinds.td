@@ -7245,6 +7245,8 @@ def warn_use_chan_without_typecheck : Warning<
 // __CoroC_New
 def err_new_invalid_scope : Error<
     "__CoroC_New not allowed in this scope">;
+def err_new_recurrent_define : Error<
+    "__CoroC_New not allowed using CoroC ref types as element's type">;
 def err_new_invalid_size_param : Error<
     "the second param of __CoroC_New must be an integar typed expr">;
 def err_new_unexpect_fini_param : Error<

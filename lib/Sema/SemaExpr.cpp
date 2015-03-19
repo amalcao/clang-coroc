@@ -13739,6 +13739,13 @@ Sema::ActOnCoroCNewExpr(SourceLocation NewLoc, SourceLocation GTLoc,
   TypeSourceInfo *TSInfo = nullptr;
   QualType T = GetTypeFromParser(Ty, &TSInfo);
 
+  // check if the element type is CoroC ref types,
+  // __task_t, __chan_t or __refcnt_t.
+  if (T->isCoroCReferenceType()) {
+    Diag(NewLoc, diag::err_new_recurrent_define);
+    return ExprError();
+  }
+
   // check if the SIZE field is valid 
   if (SE != nullptr) {
     QualType Ty = SE->getType().getCanonicalType();
@@ -13751,8 +13758,8 @@ Sema::ActOnCoroCNewExpr(SourceLocation NewLoc, SourceLocation GTLoc,
   // check if the Fini field is valid
   if (FE != nullptr) {
     // The user defined destructor is only for user defined
-    // types -- stuctures and unions in C.
-    if (!T->isStructureType()) {
+    // types -- stuctures and unions in C or pointers .
+    if (!T->isStructureType() && !T->isPointerType()) {
       Diag(NewLoc, diag::err_new_unexpect_fini_param);
       return ExprError();
     }
