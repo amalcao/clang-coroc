@@ -533,7 +533,8 @@ public:
   bool VisitCallExpr(CallExpr *E);
   bool VisitMemberExpr(MemberExpr *E);
   bool VisitArraySubscriptExpr(ArraySubscriptExpr *E);
-
+  bool VisitInitListExpr(InitListExpr *E);
+  
   Expr *VisitBinaryOperator(BinaryOperator *B);
   Expr *VisitChanOperator(BinaryOperator *B, unsigned Opc);
   Expr *VisitAssignmentOperator(BinaryOperator *B);
@@ -1597,6 +1598,14 @@ bool CoroCRecursiveASTVisitor::VisitReturnStmt(ReturnStmt *S) {
 
   emitCleanupUntil(SCOPE_FUNC | SCOPE_FUNC_RET, S->getSourceRange(), 
                   !isSingleReturnStmt);
+
+  /* don't need to generate the cleanup code after top level return */
+  if (RE == nullptr && isSingleReturnStmt) {
+    ScopeHelper *CurScope = ScopeStack[ScopeStack.size() - 1];
+    if (CurScope->ScopeFlags & SCOPE_FUNC)
+      CurScope->ScopeFlags |= SCOPE_FUNC_RET;
+  }
+
   return true;
 }
 
@@ -1815,6 +1824,32 @@ bool CoroCRecursiveASTVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr* E) {
   return true;
 }
 
+/// If any line of the InitListExpr is a CoroC auto-ref type,
+/// add the refcnt before assignment..
+bool CoroCRecursiveASTVisitor::VisitInitListExpr(InitListExpr *E) {
+  
+  unsigned size = ScopeStack.size();
+  ScopeHelper *CurScope = ScopeStack[size - 1];
+
+  /* ignore the global scope !! */
+  if (CurScope->ScopeFlags & SCOPE_GLOBAL)
+    return true;
+
+  for (unsigned i = 0; i < E->getNumInits(); ++i) {
+    DesignatedInitExpr *DIE = 
+        dyn_cast<DesignatedInitExpr>(E->getInit(i));
+    if (DIE == nullptr) continue;
+    
+    Expr *Init = DIE->getInit();
+
+    if (IsCoroCAutoRefExpr(Init)) {
+      Rewrite.InsertTextBefore(Init->getLocStart(), "__refcnt_get(");
+      Rewrite.InsertTextAfterToken(Init->getLocEnd(), ")");
+    }
+  }
+
+  return true;
+}
 
 /// Find and fix the binary operator expression.
 /// By now, we just handle the CoroC channel operations and 
