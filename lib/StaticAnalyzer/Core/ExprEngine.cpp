@@ -679,6 +679,17 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
   assert(!isa<Expr>(S) || S == cast<Expr>(S)->IgnoreParens());
 
   switch (S->getStmtClass()) {
+    // CoroC not supported yet
+    case Expr::CoroCAsyncCallExprClass:
+    case Expr::CoroCMakeChanExprClass:
+    case Expr::CoroCNewExprClass:
+    case Expr::CoroCNullExprClass:
+    case Expr::CoroCSpawnCallExprClass:
+    case Stmt::CoroCSelectStmtClass:
+    case Stmt::CoroCCaseStmtClass:
+    case Stmt::CoroCQuitStmtClass:
+    case Stmt::CoroCYieldStmtClass:
+
     // C++ and ARC stuff we don't support yet.
     case Expr::ObjCIndirectCopyRestoreExprClass:
     case Stmt::CXXDependentScopeMemberExprClass:

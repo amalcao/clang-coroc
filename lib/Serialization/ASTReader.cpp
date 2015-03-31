@@ -5840,6 +5840,11 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_SAMPLER_ID:    T = Context.OCLSamplerTy;       break;
     case PREDEF_TYPE_EVENT_ID:      T = Context.OCLEventTy;         break;
     case PREDEF_TYPE_AUTO_DEDUCT:   T = Context.getAutoDeductType(); break;
+
+    case PREDEF_TYPE_COROC_CHAN:    T = Context.ChanRefTy; break;
+    case PREDEF_TYPE_COROC_TASK:    T = Context.TaskRefTy; break;
+    case PREDEF_TYPE_COROC_REFCNT:  T = Context.GeneralRefTy; break;
+    case PREDEF_TYPE_COROC_GROUP:   T = Context.GroupTy; break;
         
     case PREDEF_TYPE_AUTO_RREF_DEDUCT: 
       T = Context.getAutoRRefDeductType(); 
@@ -5857,6 +5862,8 @@ QualType ASTReader::GetType(TypeID ID) {
       T = Context.BuiltinFnTy;
       break;
     }
+
+      
 
     assert(!T.isNull() && "Unknown predefined type");
     return T.withFastQualifiers(FastQuals);

@@ -242,6 +242,7 @@ til::SExpr *SExprBuilder::translateUnaryOperator(const UnaryOperator *UO,
   case UO_AddrOf:
   case UO_Deref:
   case UO_Plus:
+  case UO_AutoDeref:  // FIXME
     return translate(UO->getSubExpr(), Ctx);
 
   case UO_Minus:

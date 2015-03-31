@@ -413,6 +413,7 @@ ComplexPairTy ComplexExprEmitter::EmitScalarToComplexCast(llvm::Value *Val,
 ComplexPairTy ComplexExprEmitter::EmitCast(CastExpr::CastKind CK, Expr *Op,
                                            QualType DestTy) {
   switch (CK) {
+  case CK_NullToCoroCReference:  // FIXME
   case CK_Dependent: llvm_unreachable("dependent cast kind in IR gen!");
 
   // Atomic to non-atomic casts may be more than a no-op for some platforms and

@@ -2945,6 +2945,7 @@ bool Expr::HasSideEffects(const ASTContext &Ctx) const {
   case CoroCSpawnCallExprClass:
   case CoroCMakeChanExprClass:
   case CoroCAsyncCallExprClass:
+  case CoroCNewExprClass:
     // These always have a side-effect.
     return true;
 

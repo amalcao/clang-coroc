@@ -90,6 +90,12 @@ void CodeGenFunction::EmitStmt(const Stmt *S) {
   case Stmt::CaseStmtClass:
     llvm_unreachable("should have emitted these statements as simple");
 
+  case Stmt::CoroCCaseStmtClass:
+  case Stmt::CoroCQuitStmtClass:
+  case Stmt::CoroCSelectStmtClass:
+  case Stmt::CoroCYieldStmtClass:
+    llvm_unreachable("invalid statement, not a CoroC context");
+
 #define STMT(Type, Base)
 #define ABSTRACT_STMT(Op)
 #define EXPR(Type, Base) \

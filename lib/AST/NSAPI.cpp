@@ -360,6 +360,11 @@ NSAPI::getNSNumberFactoryMethodKind(QualType T) const {
   case BuiltinType::Half:
   case BuiltinType::PseudoObject:
   case BuiltinType::BuiltinFn:
+  // FIXME:
+  case BuiltinType::ChanRef:
+  case BuiltinType::TaskRef:
+  case BuiltinType::GeneralRef:
+  case BuiltinType::Group:
     break;
   }
   

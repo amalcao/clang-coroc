@@ -391,6 +391,11 @@ llvm::DIType CGDebugInfo::CreateType(const BuiltinType *BT) {
 #define PLACEHOLDER_TYPE(Id, SingletonId) \
   case BuiltinType::Id:
 #include "clang/AST/BuiltinTypes.def"
+  case BuiltinType::ChanRef:
+  case BuiltinType::TaskRef:
+  case BuiltinType::GeneralRef:
+  case BuiltinType::Group:
+    
   case BuiltinType::Dependent:
     llvm_unreachable("Unexpected builtin type");
   case BuiltinType::NullPtr:

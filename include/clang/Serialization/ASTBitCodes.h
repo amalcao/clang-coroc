@@ -749,7 +749,16 @@ namespace clang {
       /// \brief OpenCL event type.
       PREDEF_TYPE_EVENT_ID      = 44,
       /// \brief OpenCL sampler type.
-      PREDEF_TYPE_SAMPLER_ID    = 45
+      PREDEF_TYPE_SAMPLER_ID    = 45,
+
+      /// \brief CoroC channel type.
+      PREDEF_TYPE_COROC_CHAN    = 46,
+      /// \brief CoroC task type.
+      PREDEF_TYPE_COROC_TASK    = 47,
+      /// \brief CoroC refcnt type.
+      PREDEF_TYPE_COROC_REFCNT  = 48,
+      /// \brief CoroC group type.
+      PREDEF_TYPE_COROC_GROUP   = 49,
     };
 
     /// \brief The number of predefined type IDs that are reserved for

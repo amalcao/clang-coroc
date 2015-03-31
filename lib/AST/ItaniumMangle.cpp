@@ -1979,6 +1979,11 @@ void CXXNameMangler::mangleType(const BuiltinType *T) {
 #define PLACEHOLDER_TYPE(Id, SingletonId) \
   case BuiltinType::Id:
 #include "clang/AST/BuiltinTypes.def"
+  case BuiltinType::ChanRef:
+  case BuiltinType::TaskRef:
+  case BuiltinType::GeneralRef:
+  case BuiltinType::Group:
+
   case BuiltinType::Dependent:
     llvm_unreachable("mangling a placeholder type");
   case BuiltinType::ObjCId: Out << "11objc_object"; break;
@@ -2612,6 +2617,12 @@ recurse:
   case Expr::ParenListExprClass:
   case Expr::LambdaExprClass:
   case Expr::MSPropertyRefExprClass:
+  
+  case Expr::CoroCMakeChanExprClass:
+  case Expr::CoroCSpawnCallExprClass:
+  case Expr::CoroCNewExprClass:
+  case Expr::CoroCAsyncCallExprClass:
+  case Expr::CoroCNullExprClass:
     llvm_unreachable("unexpected statement kind");
 
   // FIXME: invent manglings for all these.

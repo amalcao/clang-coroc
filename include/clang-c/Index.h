@@ -1976,7 +1976,22 @@ enum CXCursorKind {
    */
   CXCursor_ObjCSelfExpr                  = 146,
 
-  CXCursor_LastExpr                      = CXCursor_ObjCSelfExpr,
+
+  /**
+   *  for CoroC Exprs ..
+   */
+  CXCursor_CoroCAsyncCallExpr            = 147,
+
+  CXCursor_CoroCMaskChanExpr             = 148,
+
+  CXCursor_CoroCNewExpr                  = 149,
+
+  CXCursor_CoroCNullExpr                 = 150,
+
+  CXCursor_CoroCSpawnCallExpr            = 151,
+
+
+  CXCursor_LastExpr                      = CXCursor_CoroCSpawnCallExpr,
 
   /* Statements */
   CXCursor_FirstStmt                     = 200,
@@ -2195,7 +2210,18 @@ enum CXCursorKind {
    */
   CXCursor_SEHLeaveStmt                  = 247,
 
-  CXCursor_LastStmt                      = CXCursor_SEHLeaveStmt,
+  /** 
+   * for CoroC Stmts..
+   */
+  CXCursor_CoroCCaseStmt                 = 248,
+
+  CXCursor_CoroCSelectStmt               = 249,
+
+  CXCursor_CoroCQuitStmt                 = 250,
+
+  CXCursor_CoroCYieldStmt                = 251,
+
+  CXCursor_LastStmt                      = CXCursor_CoroCYieldStmt,
 
   /**
    * \brief Cursor that represents the translation unit itself.

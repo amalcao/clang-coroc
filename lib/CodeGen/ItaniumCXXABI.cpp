@@ -2178,6 +2178,11 @@ static bool TypeInfoIsInStandardLibrary(const BuiltinType *Ty) {
     case BuiltinType::OCLEvent:
       return true;
 
+    case BuiltinType::ChanRef:
+    case BuiltinType::TaskRef:
+    case BuiltinType::GeneralRef:
+    case BuiltinType::Group:
+
     case BuiltinType::Dependent:
 #define BUILTIN_TYPE(Id, SingletonId)
 #define PLACEHOLDER_TYPE(Id, SingletonId) \

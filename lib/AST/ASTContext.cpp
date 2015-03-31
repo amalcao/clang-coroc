@@ -5169,6 +5169,12 @@ static char getObjCEncodingForPrimitiveKind(const ASTContext *C,
     case BuiltinType::ObjCSel:
       llvm_unreachable("@encoding ObjC primitive type");
 
+    // CoroC types.
+    case BuiltinType::ChanRef:
+    case BuiltinType::TaskRef:
+    case BuiltinType::GeneralRef:
+    case BuiltinType::Group:
+
     // OpenCL and placeholder types don't need @encodings.
     case BuiltinType::OCLImage1d:
     case BuiltinType::OCLImage1dArray:

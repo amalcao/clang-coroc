@@ -2843,6 +2843,7 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
   case CK_AddressSpaceConversion:
     return EmitUnsupportedLValue(E, "unexpected cast lvalue");
 
+  case CK_NullToCoroCReference:
   case CK_Dependent:
     llvm_unreachable("dependent cast kind in IR gen!");
 

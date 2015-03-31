@@ -72,6 +72,10 @@ serialization::TypeIdxFromBuiltin(const BuiltinType *BT) {
   case BuiltinType::BuiltinFn:
                                 ID = PREDEF_TYPE_BUILTIN_FN; break;
 
+  case BuiltinType::ChanRef:    ID = PREDEF_TYPE_COROC_CHAN; break;
+  case BuiltinType::TaskRef:    ID = PREDEF_TYPE_COROC_TASK; break;
+  case BuiltinType::GeneralRef: ID = PREDEF_TYPE_COROC_REFCNT; break;
+  case BuiltinType::Group:      ID = PREDEF_TYPE_COROC_GROUP; break;
   }
 
   return TypeIdx(ID);

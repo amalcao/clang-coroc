@@ -562,6 +562,36 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
   case Stmt::OMPFlushDirectiveClass:
     K = CXCursor_OMPFlushDirective;
     break;
+
+  // For CoroC ..
+  case Stmt::CoroCCaseStmtClass:
+    K = CXCursor_CoroCCaseStmt;
+    break;
+  case Stmt::CoroCSelectStmtClass:
+    K = CXCursor_CoroCSelectStmt;
+    break;
+  case Stmt::CoroCQuitStmtClass:
+    K = CXCursor_CoroCQuitStmt;
+    break;
+  case Stmt::CoroCYieldStmtClass:
+    K = CXCursor_CoroCYieldStmt;
+    break;
+
+  case Stmt::CoroCAsyncCallExprClass:
+    K = CXCursor_CoroCAsyncCallExpr;
+    break;
+  case Stmt::CoroCMakeChanExprClass:
+    K =CXCursor_CoroCMaskChanExpr;
+    break;
+  case Stmt::CoroCNewExprClass:
+    K = CXCursor_CoroCNewExpr;
+    break;
+  case Stmt::CoroCNullExprClass:
+    K = CXCursor_CoroCNullExpr;
+    break;
+  case Stmt::CoroCSpawnCallExprClass:
+    K = CXCursor_CoroCSpawnCallExpr;
+    break;
   }
 
   CXCursor C = { K, 0, { Parent, S, TU } };

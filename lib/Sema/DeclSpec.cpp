@@ -285,6 +285,10 @@ bool Declarator::isDeclarationOfFunction() const {
     case TST_unspecified:
     case TST_void:
     case TST_wchar:
+    case TST_task_t:
+    case TST_chan_t:
+    case TST_refcnt_t:
+    case TST_group_t:
       return false;
 
     case TST_decltype_auto:

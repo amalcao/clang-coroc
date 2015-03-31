@@ -583,6 +583,13 @@ void USRGenerator::VisitType(QualType T) {
           c = 'D'; break;
         case BuiltinType::NullPtr:
           c = 'n'; break;
+
+        case BuiltinType::ChanRef:
+        case BuiltinType::TaskRef:
+        case BuiltinType::GeneralRef:
+        case BuiltinType::Group:
+          llvm_unreachable("not a CoroC context");
+
 #define BUILTIN_TYPE(Id, SingletonId)
 #define PLACEHOLDER_TYPE(Id, SingletonId) case BuiltinType::Id:
 #include "clang/AST/BuiltinTypes.def"

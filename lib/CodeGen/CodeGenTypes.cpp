@@ -386,6 +386,11 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       ResultType = CGM.getOpenCLRuntime().convertOpenCLSpecificType(Ty);
       break;
     
+    case BuiltinType::ChanRef:
+    case BuiltinType::TaskRef:
+    case BuiltinType::GeneralRef:
+    case BuiltinType::Group:
+
     case BuiltinType::Dependent:
 #define BUILTIN_TYPE(Id, SingletonId)
 #define PLACEHOLDER_TYPE(Id, SingletonId) \

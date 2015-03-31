@@ -1421,6 +1421,12 @@ bool CursorVisitor::VisitBuiltinTypeLoc(BuiltinTypeLoc TL) {
   case BuiltinType::OCLImage3d:
   case BuiltinType::OCLSampler:
   case BuiltinType::OCLEvent:
+    // FIXME
+  case BuiltinType::ChanRef:
+  case BuiltinType::TaskRef:
+  case BuiltinType::GeneralRef:
+  case BuiltinType::Group:
+
 #define BUILTIN_TYPE(Id, SingletonId)
 #define SIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
 #define UNSIGNED_TYPE(Id, SingletonId) case BuiltinType::Id:
@@ -4075,6 +4081,25 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPTaskwaitDirective");
   case CXCursor_OMPFlushDirective:
     return cxstring::createRef("OMPFlushDirective");
+
+  case CXCursor_CoroCCaseStmt:
+    return cxstring::createRef("CoroCCaseStmt");
+  case CXCursor_CoroCSelectStmt:
+    return cxstring::createRef("CoroCSelectStmt");
+  case CXCursor_CoroCQuitStmt:
+    return cxstring::createRef("CoroCQuitStmt");
+  case CXCursor_CoroCYieldStmt:
+    return cxstring::createRef("CoroCYieldStmt");
+  case CXCursor_CoroCAsyncCallExpr:
+    return cxstring::createRef("CoroCAsyncCallExpr");
+  case CXCursor_CoroCMaskChanExpr:
+    return cxstring::createRef("CoroCMakeChanExpr");
+  case CXCursor_CoroCNewExpr:
+    return cxstring::createRef("CoroCNewExpr");
+  case CXCursor_CoroCNullExpr:
+    return cxstring::createRef("CoroCNullExpr");
+  case CXCursor_CoroCSpawnCallExpr:
+    return cxstring::createRef("CoroCSpawnCallExpr");
   }
 
   llvm_unreachable("Unhandled CXCursorKind");

@@ -278,6 +278,12 @@ TypeSpecifierType BuiltinTypeLoc::getWrittenTypeSpec() const {
   case BuiltinType::Float:
   case BuiltinType::Double:
   case BuiltinType::LongDouble:
+  
+  // FIXME 
+  case BuiltinType::ChanRef:
+  case BuiltinType::TaskRef:
+  case BuiltinType::GeneralRef:
+  case BuiltinType::Group:
     llvm_unreachable("Builtin type needs extra local data!");
     // Fall through, if the impossible happens.
       

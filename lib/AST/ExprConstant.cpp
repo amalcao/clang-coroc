@@ -7166,6 +7166,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_ZeroToOCLEvent:
   case CK_NonAtomicToAtomic:
   case CK_AddressSpaceConversion:
+  case CK_NullToCoroCReference:
     llvm_unreachable("invalid cast kind for integral value");
 
   case CK_BitCast:
@@ -7639,6 +7640,7 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_ZeroToOCLEvent:
   case CK_NonAtomicToAtomic:
   case CK_AddressSpaceConversion:
+  case CK_NullToCoroCReference:
     llvm_unreachable("invalid cast kind for complex value");
 
   case CK_LValueToRValue:
@@ -8373,6 +8375,11 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
   case Expr::PseudoObjectExprClass:
   case Expr::AtomicExprClass:
   case Expr::LambdaExprClass:
+
+  case Expr::CoroCNewExprClass:         // FIXME
+  case Expr::CoroCSpawnCallExprClass:   // FIXME
+  case Expr::CoroCNullExprClass:        // FIXME
+  case Expr::CoroCMakeChanExprClass:    // FIXME
     return ICEDiag(IK_NotICE, E->getLocStart());
 
   case Expr::InitListExprClass: {

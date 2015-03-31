@@ -259,6 +259,8 @@ void ExprEngine::VisitCast(const CastExpr *CastE, const Expr *Ex,
     switch (CastE->getCastKind()) {
       case CK_LValueToRValue:
         llvm_unreachable("LValueToRValue casts handled earlier.");
+
+      case CK_NullToCoroCReference: // FIXME
       case CK_ToVoid:
         continue;
         // The analyzer doesn't do anything special with these casts,

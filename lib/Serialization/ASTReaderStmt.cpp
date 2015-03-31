@@ -2864,6 +2864,7 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
 		S = new (Context) CoroCSelectStmt(Empty);
 		break;
 
+    case EXPR_COROC_NEW:
     case EXPR_COROC_SPAWN:
     case EXPR_COROC_CHAN:
     case EXPR_COROC_NULL:

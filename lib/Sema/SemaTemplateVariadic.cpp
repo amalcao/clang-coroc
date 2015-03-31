@@ -706,6 +706,12 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
         DS.getRepAsExpr()->containsUnexpandedParameterPack())
       return true;
     break;
+
+  case TST_task_t:
+  case TST_chan_t:
+  case TST_refcnt_t:
+  case TST_group_t:
+    llvm_unreachable("not in a CoroC context");
       
   case TST_unspecified:
   case TST_void:

@@ -1105,6 +1105,13 @@ CanThrowResult Sema::canThrow(const Expr *E) {
   case Expr::MSPropertyRefExprClass:
     llvm_unreachable("Invalid class for expression");
 
+  case Expr::CoroCMakeChanExprClass:
+  case Expr::CoroCAsyncCallExprClass:
+  case Expr::CoroCNewExprClass:
+  case Expr::CoroCNullExprClass:
+  case Expr::CoroCSpawnCallExprClass:
+    llvm_unreachable("Invaild class for expression, not CoroC context");
+    
 #define STMT(CLASS, PARENT) case Expr::CLASS##Class:
 #define STMT_RANGE(Base, First, Last)
 #define LAST_STMT_RANGE(BASE, FIRST, LAST)
