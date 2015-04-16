@@ -1614,6 +1614,8 @@ void ASTStmtWriter::VisitCoroCNewExpr(CoroCNewExpr *E) {
 void ASTStmtWriter::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
   VisitExpr(E);
   Writer.AddStmt(E->getCallExpr());
+  Writer.AddStmt(E->getPrioExpr());
+  Writer.AddStmt(E->getGroupRefExpr());
   Writer.AddSourceLocation(E->getLocStart(), Record);
   Code = serialization::EXPR_COROC_SPAWN;
 }

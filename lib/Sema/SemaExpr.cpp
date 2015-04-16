@@ -13804,7 +13804,8 @@ Sema::ActOnCoroCNewExpr(SourceLocation NewLoc, SourceLocation GTLoc,
 
 /// ActOnCoroCSpawnCallExpr - Parse __CoroC_Spawn
 ExprResult
-Sema::ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E, Expr *G) {
+Sema::ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, 
+                              Expr *E, Expr *G, Expr *P) {
   if (FunctionScopes.size() < 1 ||
       getCurFunction()->CompoundScopes.size() < 1) {
     Diag(SpawnLoc, diag::err_spawn_invalid_scope);
@@ -13829,8 +13830,17 @@ Sema::ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, Expr *E, Expr *G) {
     return ExprError();
   }
 
+  // check if the P 's type is unsigned int
+  if (P != nullptr) {
+    QualType Ty = P->getType();
+    if (! Ty->isIntegerType()) {
+      Diag(P->getExprLoc(), diag::err_not_a_unsigned);
+      return ExprError();
+    }
+  }
+
   return new (Context) CoroCSpawnCallExpr(SpawnLoc,
-                                          Context.TaskRefTy, CE, RE);
+                                          Context.TaskRefTy, CE, RE, P);
 }
 
 /// ActOnCoroCAsyncCallExpr - Parse __CoroC_Async_Call

@@ -7221,7 +7221,9 @@ def err_spawn_invalid_scope : Error<
 def err_cannot_spawn_builtin: Error<
   "builtin function cannot be spawned">;
 def err_not_a_group_ref : Error<
-  "the option for __CoroC_Spawn must with a type of '__group_t'">;
+  "the group option for __CoroC_Spawn must with a type of '__group_t'">;
+def err_not_a_unsigned : Error<
+  "the priority option for __CoroC_Spawn must with a type of 'unsigned int' ">;
 
 // __CoroC_Async_Call
 def err_async_call_invalid_scope : Error<

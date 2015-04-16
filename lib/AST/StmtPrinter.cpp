@@ -2166,6 +2166,19 @@ void StmtPrinter::VisitCoroCNewExpr(CoroCNewExpr *E) {
 
 void StmtPrinter::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
   OS << "__CoroC_Spawn ";
+  if (E->getGroupRefExpr() || E->getPrioExpr()) {
+    OS << "<";
+    if (E->getPrioExpr()) {
+      PrintExpr(E->getPrioExpr());
+      if (E->getGroupRefExpr()) OS << ", ";
+    }
+
+    if (E->getGroupRefExpr())
+      PrintExpr(E->getGroupRefExpr());
+
+    OS << "> ";
+  }
+
   CallExpr *Call = E->getCallExpr();
   PrintExpr(Call->getCallee());
   OS << "(";

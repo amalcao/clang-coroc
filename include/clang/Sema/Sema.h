@@ -3103,7 +3103,7 @@ public:
   StmtResult ActOnCoroCQuitStmt(SourceLocation QuitLoc, Expr *E);
 
   ExprResult ActOnCoroCSpawnCallExpr(SourceLocation SpawnLoc, 
-                                     Expr *E, Expr *G);
+                                     Expr *E, Expr *G, Expr *P);
 
   ExprResult ActOnCoroCMakeChanExpr(SourceLocation ChanLoc, 
                                     SourceLocation GTLoc,

@@ -2020,6 +2020,8 @@ bool CoroCRecursiveASTVisitor::VisitCoroCNewExpr(CoroCNewExpr *E) {
 bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
   CallExpr *CE = E->getCallExpr();
   DeclRefExpr *G = E->getGroupRefExpr();
+  Expr *P = E->getPrioExpr();
+
   int numArgs = CE->getNumArgs();
   bool noThunk = false;
 
@@ -2027,19 +2029,36 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 
   // If the spawn call has one pointer typed param,
   // we don't need to generate the thunk function wrapper.
-  if (G == nullptr && numArgs == 1) {
-    Expr *Arg = CE->getArg(0);
-    noThunk = Arg->getType().getTypePtr()->isPointerType();
+  if (G == nullptr && numArgs <= 1) {
+    if (numArgs == 1) {
+      Expr *Arg = CE->getArg(0);
+      noThunk = Arg->getType().getTypePtr()->isPointerType();
+    } else {
+      noThunk = true;
+    }
   }
+    
+  CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
+  RewriteHelper RH(&Rewrite, &Helper);
+
+  // Loc is the very next Loc after `__CoroC_Spawn' keyword
+  SourceLocation InsertLoc = getNextTokLocStart(SpawnLoc);
 
   if (noThunk) {
-    Expr *Callee = CE->getCallee();
     // Transform to runtime call:
     //  __CoroC_Spawn( (__CoroC_spawn_entry_t)func, param );
-    Rewrite.InsertTextAfterToken(E->getLocStart(), "((__CoroC_spawn_entry_t)");
 
-    SourceLocation Loc = getNextTokLocStart(Callee->getLocEnd());
-    Rewrite.ReplaceText(Loc, 1, ", ");
+    RH << "((__CoroC_spawn_entry_t)" << CE->getCallee() << ",";
+
+    if (numArgs == 1)
+      RH << CE->getArg(0) << ", ";
+    else
+      RH << "NULL, ";
+
+    if (P == nullptr) RH << "TSC_PRIO_LOW, NULL)";
+    else RH << P << ", NULL)";
+    
+    RH.ReplaceText(SourceRange(InsertLoc, CE->getLocEnd()));
 
   } else {
     // struct __thunk_struct_xxx Px = { ... };
@@ -2051,8 +2070,6 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
 
     // get or create a new thunker
     ThunkHelper *Thunk = getOrCreateThunkHelper(CE, (G != nullptr));
-    CoroCStmtPrinterHelper Helper(Rewrite.getLangOpts());
-    RewriteHelper RH(&Rewrite, &Helper);
 
     RH << "{" << Endl;
 
@@ -2070,7 +2087,10 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
     RH << "((__CoroC_spawn_entry_t)" << funcName << ", ";
     // arg1 : param pointer
     RH << paramName.str() << ", ";
-    // arg2 : cleanup function handler
+    // arg2 : priority
+    if (P == nullptr) RH << "TSC_PRIO_NORMAL, ";
+    else RH << P << ", ";
+    // arg3 : cleanup function handler
     RH << "(__CoroC_spawn_cleanup_t)" << cleanupName << ");";
     
     RH << Endl << "}";
@@ -2080,24 +2100,15 @@ bool CoroCRecursiveASTVisitor::VisitCoroCSpawnCallExpr(CoroCSpawnCallExpr *E) {
     Rewrite.ReplaceText(Loc, 1, "");
 
     // replace the text
-    RH.ReplaceText(CE->getSourceRange());
-
-    // remove the option section <...> after the '__CoroC_Spawn' keyword
-    if (G != nullptr) {
-      SourceLocation StartLoc = getNextTokLocStart(SpawnLoc); // the Loc of '<'
-      SourceLocation EndLoc = getNextTokLocStart(G->getLocEnd()); // the Loc of '>'
-      
-      Rewrite.RemoveText(SourceRange(StartLoc, EndLoc));
-      // stop to traverse the GroupRefExpr 
-      E->setGroupRefExpr(nullptr);
-    }
-
-    // replace the '__CoroC_Spawn' with '__CoroC_Spawn_Opt'
-    Rewrite.InsertTextAfterToken(SpawnLoc, "_Opt");
-
-    // stop to traverse the CallExpr since it has been replaced
-    E->setCallExpr(nullptr);
+    RH.ReplaceText(SourceRange(InsertLoc, CE->getLocEnd()));
   }
+  
+  // stop to traverse the GroupRefExpr 
+  E->setGroupRefExpr(nullptr);
+  // stop to traverse the PrioExpr
+  E->setPrioExpr(nullptr);
+  // stop to traverse the CallExpr since it has been replaced
+  E->setCallExpr(nullptr);
 
   return true;
 }

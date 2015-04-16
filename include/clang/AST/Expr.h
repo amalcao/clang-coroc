@@ -4664,6 +4664,7 @@ public:
 class CoroCSpawnCallExpr : public Expr {
     CallExpr *TheCallExpr;
     DeclRefExpr *TheGroupExpr;
+    Expr *ThePrioExpr;
     SourceLocation SpawnLoc; 
     SourceLocation InsertLoc;
 
@@ -4671,10 +4672,11 @@ class CoroCSpawnCallExpr : public Expr {
 
 public:
     CoroCSpawnCallExpr(SourceLocation SL, QualType T, 
-                       CallExpr *E, DeclRefExpr *G = nullptr)
+                       CallExpr *E, DeclRefExpr *G = nullptr, 
+                       Expr *P = nullptr)
         : Expr(CoroCSpawnCallExprClass, T, VK_RValue,
                 OK_Ordinary, false, false, false, false)
-        , TheCallExpr(E), TheGroupExpr(G)
+        , TheCallExpr(E), TheGroupExpr(G), ThePrioExpr(P)
         , SpawnLoc(SL), InsertLoc(SL) { }
 
     /// \brief Build an empty block expression
@@ -4689,6 +4691,10 @@ public:
     DeclRefExpr *getGroupRefExpr() { return TheGroupExpr; }
     void setGroupRefExpr(DeclRefExpr *G) { TheGroupExpr = G; }
  
+    const Expr *getPrioExpr() const { return ThePrioExpr; }
+    Expr *getPrioExpr() { return ThePrioExpr; }
+    void setPrioExpr(Expr *E) { ThePrioExpr = E; }
+
     SourceLocation getLocStart() const LLVM_READONLY {
       return SpawnLoc;
     }

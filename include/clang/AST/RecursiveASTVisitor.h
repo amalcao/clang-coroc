@@ -2358,6 +2358,7 @@ DEF_TRAVERSE_STMT(CoroCQuitStmt, {
 DEF_TRAVERSE_STMT(CoroCSpawnCallExpr, {
     TRY_TO(TraverseStmt(S->getCallExpr()));
     TRY_TO(TraverseStmt(S->getGroupRefExpr()));
+    TRY_TO(TraverseStmt(S->getPrioExpr()));
     return true; })
 
 DEF_TRAVERSE_STMT(CoroCMakeChanExpr, {

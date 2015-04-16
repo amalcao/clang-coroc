@@ -1164,6 +1164,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
   case tok::kw___CoroC_Spawn: {
     SourceLocation SpawnLoc = ConsumeToken();
     ExprResult GroupRefExpr;
+    ExprResult PrioExpr;
     if (!getLangOpts().CoroC) {
       Diag(SpawnLoc, diag::err_coro_disable);
       SkipUntil(tok::semi, StopAtSemi); // FIXME!!
@@ -1173,25 +1174,41 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     // check if any options is provided in "< ... >"
     if (Tok.getKind() == tok::less) {
       ConsumeToken(); // eat the '<'
+      
+      for (unsigned i = 0; i < 2; ++i) {
+        ExprResult E = ParseCastExpression(false);
+        if (E.isInvalid()) {
+          SkipUntil(tok::semi, StopAtSemi);
+          return ExprError();
+        }
 
-      GroupRefExpr = ParseCastExpression(false);
-      if (GroupRefExpr.isInvalid()) {
-        SkipUntil(tok::semi, StopAtSemi);
-        return ExprError();
-      }
+        QualType Ty = E.get()->getType();
+        if (Ty->isIntegerType())
+          PrioExpr = E;
+        else
+          GroupRefExpr = E;
 
-      // match the '>'
-      if (Tok.getKind() != tok::greater) {
+        // match the ','
+        if (i == 0 && Tok.getKind() == tok::comma) {
+          ConsumeToken(); // eat the ','
+          continue;
+        }
+
+        // match the '>'
+        if (Tok.getKind() == tok::greater) break;
+        
+        // handle the error cases ..
         ExpectAndConsume(tok::greater);
         SkipUntil(tok::semi, StopAtSemi);
         return ExprError();
       }
+
       ConsumeToken(); // eat the '>'
     }
 
     Res = ParseCastExpression(false);
     if (Res.isInvalid()) return ExprError();
-    return Actions.ActOnCoroCSpawnCallExpr(SpawnLoc, Res.get(), GroupRefExpr.get());
+    return Actions.ActOnCoroCSpawnCallExpr(SpawnLoc, Res.get(), GroupRefExpr.get(), PrioExpr.get());
   }
 
   // postfix-expression:
