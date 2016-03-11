@@ -1,14 +1,14 @@
 //===--- RewriteCoroC.cpp - Playground for the code rewriter
 //---------------===//
-//
-//                     The LLVM Compiler Infrastructure
+// Copyright (c) 2016 Amal Cao (amalcaowei@gmail.com)
+// All rights reserved.
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
 //
-// Hacks and fun related to the code rewriter.
+// Hacks and fun related to the CoroC code rewriter.
 //
 //===----------------------------------------------------------------------===//
 

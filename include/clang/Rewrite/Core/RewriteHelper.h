@@ -1,7 +1,8 @@
 //===---  RewriteHelper.h - A simple helper to generate formated code block for the Rewriter.
 //---------------===//
 //
-//                     The LLVM Compiler Infrastructure
+// Copyright (c) 2016 Amal Cao (amalcaowei@gmail.com)
+// All rights reserved.
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
@@ -73,14 +74,14 @@ namespace ict {
       if (cleanInsert) e--; // NOTE: split will add the last empty line, so we'd better ignore it!
 
       for (unsigned i = 0; i != e; ++i) {
-        // the first line will insert into the orignal position,
-        // so it will share the indentation with orignal line, ignore padding..
+        // the first line will insert into the original position,
+        // so it will share the indentation with original line, ignore padding..
         if (i != 0) Output += Indent.str();
         Output += lines[i].str();
         if (i < e-1) Output += "\n";
       }
 
-      // add the indentation for the orignal position for Loc!!
+      // add the indentation for the original position for Loc!!
       if (cleanInsert) {
         Output += "\n";
         Output += Indent.str();
